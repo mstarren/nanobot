@@ -481,3 +481,41 @@ class TestBuildMessages:
         user_msg = messages[-1]["content"]
         assert isinstance(user_msg, list)
         assert any(b.get("type") == "image_url" for b in user_msg)
+
+
+def test_notebook_instructions_appear_in_system_prompt(tmp_path: Path) -> None:
+    """Per-notebook instructions are rendered as their own prompt section."""
+    from nanobot.agent.context import ContextBuilder
+
+    builder = ContextBuilder(tmp_path)
+    prompt = builder.build_system_prompt(
+        notebook_instructions="Answer in Japanese.",
+    )
+    assert "# Notebook Instructions" in prompt
+    assert "Answer in Japanese." in prompt
+
+    # None / blank means no section is added.
+    plain = builder.build_system_prompt()
+    assert "# Notebook Instructions" not in plain
+    blank = builder.build_system_prompt(notebook_instructions="   ")
+    assert "# Notebook Instructions" not in blank
+
+
+def test_notebook_instructions_flow_through_build_messages(tmp_path: Path) -> None:
+    """build_messages passes the section into the system message."""
+    from nanobot.agent.context import ContextBuilder
+
+    builder = ContextBuilder(tmp_path)
+    messages = builder.build_messages(
+        history=[],
+        current_message="hello",
+        notebook_instructions="Stay brief.",
+    )
+    system = next(m for m in messages if m["role"] == "system")
+    assert "# Notebook Instructions" in system["content"]
+    assert "Stay brief." in system["content"]
+
+
+def test_context_builder_builds_messages_with_system_prompt(tmp_path: Path) -> None:
+    """A basic history should produce a system message first, then the history,
+    then the current message."""
