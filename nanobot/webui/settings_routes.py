@@ -140,6 +140,8 @@ _SYSTEM_ROUTES = {
     "/api/settings/pairing": "pairing-list",
     "/api/settings/pairing/approve": "pairing-approve",
     "/api/settings/pairing/deny": "pairing-deny",
+    "/api/approval/list": "approval-list",
+    "/api/approval/respond": "approval-respond",
     "/api/settings/mcp-presets": "mcp-list",
     "/api/settings/version-check": "version-check",
     **{
@@ -176,6 +178,7 @@ _SETTINGS_MUTATION_PATHS = frozenset({
     "/api/settings/channels/configure",
     "/api/settings/pairing/approve",
     "/api/settings/pairing/deny",
+    "/api/approval/respond",
     "/api/settings/mcp-oauth/start",
     "/api/settings/mcp-oauth/complete",
     "/api/settings/mcp-oauth/cancel",

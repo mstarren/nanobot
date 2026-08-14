@@ -63,6 +63,8 @@ import type {
   BootstrapResponse,
   ChatSummary,
   RuntimeSurface,
+  ApprovalPayload,
+  ApprovalRequestInfo,
   PairingRequestInfo,
   SessionAutomationJob,
   SettingsPayload,
@@ -72,6 +74,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  fetchApprovalRequests,
   fetchPairingRequests,
   fetchSettings,
   fetchWorkspaces,
@@ -115,6 +118,8 @@ const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
 const PAIRING_POLL_INTERVAL_MS = 5_000;
 const PAIRING_IDLE_POLL_INTERVAL_MS = 15_000;
 const PAIRING_DISMISS_SNOOZE_MS = 30_000;
+const APPROVAL_POLL_INTERVAL_MS = 3_000;
+const APPROVAL_IDLE_POLL_INTERVAL_MS = 10_000;
 type ShellView = "chat" | "settings" | "apps" | "automations" | "skills";
 type ShellRoute = {
   view: ShellView;
@@ -514,6 +519,135 @@ function HostChrome({
         </div>
       ) : null}
     </header>
+  );
+}
+
+function ApprovalRequestsPopup({
+  requests,
+  total,
+  busyId,
+  error,
+  onRespond,
+  onDismiss,
+}: {
+  requests: ApprovalRequestInfo[];
+  total: number;
+  busyId: string | null;
+  error: string | null;
+  onRespond: (id: string, decision: "approve" | "deny") => void;
+  onDismiss: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const firstRequest = requests[0] ?? null;
+  if (!firstRequest) return null;
+
+  let argsText = "";
+  try {
+    argsText = JSON.stringify(firstRequest.arguments, null, 2);
+  } catch {
+    argsText = String(firstRequest.arguments);
+  }
+  const verdictLabel =
+    firstRequest.verdict === "deny"
+      ? t("app.approval.verdictDenied", {
+          defaultValue: "Denied by smart triage",
+        })
+      : t("app.approval.verdictEscalated", {
+          defaultValue: "Escalated for review",
+        });
+
+  return (
+    <div
+      role="dialog"
+      aria-live="polite"
+      aria-label={t("app.approval.title", { defaultValue: "Approval required" })}
+      className={cn(
+        "fixed right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-[70]",
+        "w-[min(calc(100vw-2rem),28rem)] rounded-[24px]",
+        "border border-border/70 bg-popover/95 p-4 text-popover-foreground",
+        "shadow-[0_24px_70px_rgba(15,23,42,0.20)] backdrop-blur-xl",
+        "animate-in fade-in-0 slide-in-from-top-2 duration-200",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-semibold tracking-[-0.01em]">
+            {t("app.approval.title", { defaultValue: "⚠️ Approval required" })}
+          </p>
+          <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">
+            {firstRequest.tool_name}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label={t("common.close", { defaultValue: "Close" })}
+          onClick={() => onDismiss(firstRequest.id)}
+          className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+
+      <div className="mt-2">
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+            firstRequest.verdict === "deny"
+              ? "bg-destructive/10 text-destructive"
+              : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+          )}
+        >
+          {verdictLabel}
+        </span>
+        <p className="mt-2 text-[13px] leading-5 text-foreground">{firstRequest.reason}</p>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[12.5px] font-medium text-foreground">
+          {t("app.approval.fullCall", { defaultValue: "Full tool call" })}
+        </p>
+        <pre className="mt-1 max-h-48 overflow-auto rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed text-foreground">
+          {argsText}
+        </pre>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="text-[12px] text-muted-foreground">
+          {total > 1
+            ? t("app.approval.queueCount", {
+                defaultValue: "{{count}} pending",
+                count: total,
+              })
+            : t("app.approval.expiresInline", {
+                defaultValue: "Expires in {{seconds}}s.",
+                seconds: firstRequest.expires_in_seconds ?? "—",
+              })}
+        </span>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={Boolean(busyId)}
+            onClick={() => onRespond(firstRequest.id, "deny")}
+          >
+            {t("app.approval.deny", { defaultValue: "Deny" })}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={Boolean(busyId)}
+            onClick={() => onRespond(firstRequest.id, "approve")}
+          >
+            {t("app.approval.approve", { defaultValue: "Approve" })}
+          </Button>
+        </div>
+      </div>
+
+      {error ? (
+        <p className="mt-2 text-[12px] leading-5 text-destructive">{error}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1097,6 +1231,13 @@ function Shell({
   const [snoozedPairingCodes, setSnoozedPairingCodes] = useState<Map<string, number>>(
     () => new Map(),
   );
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequestInfo[]>([]);
+  const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const approvalRefreshRef = useRef<Promise<number> | null>(null);
+  const [snoozedApprovalIds, setSnoozedApprovalIds] = useState<Map<string, number>>(
+    () => new Map(),
+  );
   const [runningChatIds, setRunningChatIds] = useState<Set<string>>(() => new Set());
   const [updatedChatIds, setUpdatedChatIds] = useState<Set<string>>(readSessionUpdateChatIds);
   const [workspaces, setWorkspaces] = useState<WorkspacesPayload | null>(null);
@@ -1254,6 +1395,59 @@ function Shell({
       if (timer !== null) window.clearTimeout(timer);
     };
   }, [pageVisible, refreshPairingRequests]);
+
+  const refreshApprovalRequests = useCallback((): Promise<number> => {
+    if (approvalRefreshRef.current) return approvalRefreshRef.current;
+
+    const request = (async () => {
+      try {
+        const payload = await fetchApprovalRequests(getToken());
+        const requests = Array.isArray(payload.requests) ? payload.requests : [];
+        setApprovalRequests(requests);
+        setSnoozedApprovalIds((current) => {
+          if (current.size === 0) return current;
+          const activeIds = new Set(requests.map((request) => request.id));
+          const now = Date.now();
+          const next = new Map(
+            Array.from(current).filter(
+              ([id, snoozedUntil]) => activeIds.has(id) && snoozedUntil > now,
+            ),
+          );
+          return next.size === current.size ? current : next;
+        });
+        return requests.length;
+      } catch {
+        // Approval requests are an opportunistic WebUI affordance.
+        return 0;
+      }
+    })();
+    const clearRequest = () => {
+      if (approvalRefreshRef.current === request) approvalRefreshRef.current = null;
+    };
+    approvalRefreshRef.current = request;
+    void request.then(clearRequest, clearRequest);
+    return request;
+  }, [getToken]);
+
+  useEffect(() => {
+    if (!pageVisible) return undefined;
+
+    let disposed = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      const requestCount = await refreshApprovalRequests();
+      if (disposed) return;
+      timer = window.setTimeout(
+        () => void poll(),
+        requestCount > 0 ? APPROVAL_POLL_INTERVAL_MS : APPROVAL_IDLE_POLL_INTERVAL_MS,
+      );
+    };
+    void poll();
+    return () => {
+      disposed = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [pageVisible, refreshApprovalRequests]);
 
   const activeSession = useMemo<ChatSummary | null>(() => {
     if (!activeKey) return null;
@@ -2244,6 +2438,55 @@ function Shell({
     });
   }, []);
 
+  const onApprovalAction = useCallback(
+    async (requestId: string, decision: "approve" | "deny") => {
+      setApprovalBusyId(requestId);
+      setApprovalError(null);
+      try {
+        const payload = await client.requestMutation<ApprovalPayload>(
+          "approval.respond",
+          { id: requestId, decision },
+        );
+        setApprovalRequests(
+          Array.isArray(payload.requests) ? payload.requests : [],
+        );
+        setSnoozedApprovalIds((current) => {
+          if (!current.has(requestId)) return current;
+          const next = new Map(current);
+          next.delete(requestId);
+          return next;
+        });
+      } catch (e) {
+        setApprovalError(e instanceof Error ? e.message : String(e));
+        void refreshApprovalRequests();
+      } finally {
+        setApprovalBusyId(null);
+      }
+    },
+    [client, refreshApprovalRequests],
+  );
+
+  const onDismissApprovalRequest = useCallback((requestId: string) => {
+    setSnoozedApprovalIds((current) => {
+      const snoozedUntil = Date.now() + PAIRING_DISMISS_SNOOZE_MS;
+      if (current.get(requestId) === snoozedUntil) return current;
+      const next = new Map(current);
+      next.set(requestId, snoozedUntil);
+      return next;
+    });
+  }, []);
+
+  const visibleApprovalRequests = useMemo(
+    () => {
+      const now = Date.now();
+      return approvalRequests.filter((request) => {
+        const snoozedUntil = snoozedApprovalIds.get(request.id);
+        return !snoozedUntil || snoozedUntil <= now;
+      });
+    },
+    [approvalRequests, snoozedApprovalIds],
+  );
+
   const titleForSession = useCallback((session: ChatSummary) => (
     sidebarState.title_overrides[session.key]
     || session.title
@@ -2931,6 +3174,14 @@ function Shell({
           error={pairingError}
           onApprove={(code) => void onPairingAction("approve", code)}
           onDismiss={onDismissPairingRequest}
+        />
+        <ApprovalRequestsPopup
+          requests={visibleApprovalRequests}
+          total={visibleApprovalRequests.length}
+          busyId={approvalBusyId}
+          error={approvalError}
+          onRespond={(id, decision) => void onApprovalAction(id, decision)}
+          onDismiss={onDismissApprovalRequest}
         />
       </div>
     </ThemeProvider>

@@ -20,6 +20,7 @@ import {
 } from "@/components/thread/activity/activity-text";
 import { FileEditGroup, type FileEditSummary } from "@/components/thread/activity/FileEditRow";
 import { GenericToolRun } from "@/components/thread/activity/GenericToolRun";
+import { ToolApprovalPanel } from "@/components/thread/activity/ToolApprovalPanel";
 import {
   canGroupGenericToolRuns,
   type GenericToolRunItem,
@@ -444,6 +445,20 @@ function ActivityMessageTimeline({
           active={active && index === messages.length - 1}
           cliAppsByName={cliAppsByName}
           mcpPresetsByName={mcpPresetsByName}
+        />,
+      );
+    }
+    for (const event of message.toolEvents ?? []) {
+      const approval = event.approval;
+      if (!approval) continue;
+      items.push(
+        <ToolApprovalPanel
+          key={`approval:${event.call_id ?? message.id}`}
+          approval={approval}
+          toolName={event.name ?? "tool"}
+          argumentsJson={event.arguments}
+          result={event.result}
+          error={event.error}
         />,
       );
     }

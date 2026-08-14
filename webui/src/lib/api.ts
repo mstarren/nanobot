@@ -1,5 +1,6 @@
 import type {
   ApiServicePayload,
+  ApprovalPayload,
   AutomationsPayload,
   AutomationUpdatePayload,
   ChannelConfigurePayload,
@@ -585,6 +586,18 @@ export async function runPairingAction(
   code: string,
 ): Promise<PairingPayload> {
   return mutation<PairingPayload>(transport, `settings.pairing.${action}`, { code });
+}
+
+export async function fetchApprovalRequests(
+  token: string,
+  base: string = "",
+): Promise<ApprovalPayload> {
+  return request<ApprovalPayload>(
+    `${base}/api/approval/list`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
 }
 
 export async function startChannelConnect(
