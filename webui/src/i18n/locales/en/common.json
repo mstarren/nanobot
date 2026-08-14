@@ -1509,5 +1509,16 @@
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
     }
+  },
+  "subagent": {
+    "running": "Subagents ({{count}})",
+    "running_one": "Subagent ({{count}})",
+    "phase": "{{phase}}",
+    "iteration": "iter {{count}}",
+    "iteration_one": "iter {{count}}",
+    "stop": "Stop",
+    "stop_title": "Cancel this subagent",
+    "running_other": "Subagents ({{count}})",
+    "iteration_other": "iter {{count}}"
   }
 }

@@ -276,6 +276,28 @@ export interface AgentUIBlob {
   data?: unknown;
 }
 
+/**
+ * Live subagent status pushed on progress frames with
+ * ``agent_ui.kind === "subagent"`` (see SubagentManager._subagent_ui_payload).
+ */
+export interface SubagentProgress {
+  task_id: string;
+  label: string;
+  phase: string;
+  iteration?: number;
+  tool_events?: ToolProgressEvent[];
+  usage?: Record<string, number>;
+  stop_reason?: string | null;
+  error?: string | null;
+  started_wall_ms?: number;
+  /** Present on records returned by the detail API after completion. */
+  final_result?: string | null;
+  final_status?: string | null;
+  running?: boolean;
+  /** Wall-clock completion time (ms) on detail records. */
+  finished_wall_ms?: number;
+}
+
 /** WebSocket snapshot for sustained goals (`goal_state` events; keyed by ``chat_id``). */
 export interface GoalStateWsPayload {
   active: boolean;

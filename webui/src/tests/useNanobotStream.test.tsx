@@ -134,6 +134,7 @@ function fakeClient() {
       },
       sendMessage: vi.fn(),
       finishRunLocally: vi.fn(),
+      requestMutation: vi.fn().mockResolvedValue({ ok: true }),
       newChat: vi.fn(),
       forkChat: vi.fn(),
       attach: vi.fn(),
@@ -2914,5 +2915,107 @@ describe("live/replay projection before canonical-event revision migration", () 
     }
 
     expect(normalizeProjection(result.current.messages)).toEqual(fixtureCase.expected);
+  });
+});
+
+describe("subagent progress frames", () => {
+  it("tracks live subagent status from agent_ui progress frames", () => {
+    const fake = fakeClient();
+    const { result } = renderHook(() => useNanobotStream("chat-sub", EMPTY_MESSAGES), {
+      wrapper: wrap(fake.client),
+    });
+
+    act(() => {
+      fake.emit("chat-sub", {
+        event: "message",
+        chat_id: "chat-sub",
+        kind: "progress",
+        text: "Subagent [researcher] awaiting_tools",
+        agent_ui: {
+          kind: "subagent",
+          data: {
+            task_id: "sub-1",
+            label: "researcher",
+            phase: "awaiting_tools",
+            iteration: 2,
+            tool_events: [{ name: "exec", phase: "start" }],
+          },
+        },
+      });
+    });
+
+    expect(result.current.subagents["sub-1"]).toMatchObject({
+      label: "researcher",
+      phase: "awaiting_tools",
+      iteration: 2,
+      running: true,
+    });
+
+    // A terminal phase flips the card to a finished state.
+    act(() => {
+      fake.emit("chat-sub", {
+        event: "message",
+        chat_id: "chat-sub",
+        kind: "progress",
+        text: "Subagent [researcher] done",
+        agent_ui: {
+          kind: "subagent",
+          data: {
+            task_id: "sub-1",
+            label: "researcher",
+            phase: "done",
+            iteration: 3,
+            tool_events: [],
+            final_result: "all good",
+            final_status: "ok",
+          },
+        },
+      });
+    });
+
+    expect(result.current.subagents["sub-1"].phase).toBe("done");
+    expect(result.current.subagents["sub-1"].running).toBe(false);
+    expect(result.current.subagents["sub-1"].final_result).toBe("all good");
+  });
+
+  it("resets subagent state when switching chats", () => {
+    const fake = fakeClient();
+    const { result, rerender } = renderHook(
+      ({ chatId }: { chatId: string | null }) => useNanobotStream(chatId, EMPTY_MESSAGES),
+      {
+        wrapper: wrap(fake.client),
+        initialProps: { chatId: "chat-a" },
+      },
+    );
+
+    act(() => {
+      fake.emit("chat-a", {
+        event: "message",
+        chat_id: "chat-a",
+        kind: "progress",
+        text: "Subagent [worker] initializing",
+        agent_ui: {
+          kind: "subagent",
+          data: { task_id: "sub-9", label: "worker", phase: "initializing" },
+        },
+      });
+    });
+    expect(result.current.subagents["sub-9"]).toBeDefined();
+
+    rerender({ chatId: "chat-b" });
+    expect(result.current.subagents).toEqual({});
+  });
+
+  it("stopSubagent requests the subagent.stop mutation", () => {
+    const fake = fakeClient();
+    const { result } = renderHook(() => useNanobotStream("chat-sub", EMPTY_MESSAGES), {
+      wrapper: wrap(fake.client),
+    });
+
+    result.current.stopSubagent("sub-1");
+
+    expect(fake.client.requestMutation).toHaveBeenCalledWith("subagent.stop", {
+      task_id: "sub-1",
+    });
   });
 });
