@@ -62,6 +62,7 @@ import { ClientProvider, useClient } from "@/providers/ClientProvider";
 import type {
   BootstrapResponse,
   ChatSummary,
+  Notebook,
   RuntimeSurface,
   ApprovalPayload,
   ApprovalRequestInfo,
@@ -73,12 +74,25 @@ import type {
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddToNotebookDialog } from "@/components/notebooks/AddToNotebookDialog";
+import {
+  NotebookEditDialog,
+  type NotebookValues,
+} from "@/components/notebooks/NotebookEditDialog";
 import {
   fetchApprovalRequests,
   fetchPairingRequests,
   fetchSettings,
   fetchWorkspaces,
   runPairingAction,
+} from "@/lib/api";
+import {
+  addSessionToNotebook,
+  createNotebook,
+  deleteNotebook,
+  fetchNotebooks,
+  removeSessionFromNotebook,
+  updateNotebook,
 } from "@/lib/api";
 import {
   createRuntimeHost,
@@ -1515,6 +1529,94 @@ function Shell({
     void refreshWorkspaces();
   }, [refreshWorkspaces]);
 
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [notebookDialog, setNotebookDialog] = useState<
+    | { mode: "create" }
+    | { mode: "edit"; notebook: Notebook }
+    | null
+  >(null);
+  const [addToNotebookSessionKey, setAddToNotebookSessionKey] = useState<
+    string | null
+  >(null);
+
+  const refreshNotebooks = useCallback(async () => {
+    try {
+      const payload = await fetchNotebooks(getToken());
+      setNotebooks(payload.notebooks);
+    } catch {
+      // Keep the last known notebooks when the fetch fails.
+    }
+  }, [getToken]);
+
+  useEffect(() => {
+    void refreshNotebooks();
+  }, [refreshNotebooks]);
+
+  const handleNotebookSubmit = useCallback(async (values: NotebookValues) => {
+    try {
+      if (notebookDialog?.mode === "edit") {
+        await updateNotebook(client, notebookDialog.notebook.id, values);
+      } else {
+        await createNotebook(client, values);
+      }
+      setNotebookDialog(null);
+      void refreshNotebooks();
+    } catch {
+      // Keep the dialog open on failure so the user can retry.
+    }
+  }, [client, notebookDialog, refreshNotebooks]);
+
+  const handleNotebookDelete = useCallback(async (notebookId: string) => {
+    try {
+      await deleteNotebook(client, notebookId);
+      setNotebookDialog(null);
+      void refreshNotebooks();
+    } catch {
+      // Keep the dialog open on failure.
+    }
+  }, [client, refreshNotebooks]);
+
+  const handleAddSessionToNotebook = useCallback(
+    async (notebookId: string, sessionKey: string) => {
+      try {
+        await addSessionToNotebook(client, notebookId, sessionKey);
+        setAddToNotebookSessionKey(null);
+        void refreshNotebooks();
+      } catch {
+        // Keep the picker open on failure.
+      }
+    },
+    [client, refreshNotebooks],
+  );
+
+  const handleRemoveSessionFromNotebook = useCallback(
+    async (notebookId: string, sessionKey: string) => {
+      try {
+        await removeSessionFromNotebook(client, notebookId, sessionKey);
+        void refreshNotebooks();
+      } catch {
+        // Ignore removal failures; the next refresh reconciles.
+      }
+    },
+    [client, refreshNotebooks],
+  );
+
+  const handleAddCurrentSessionToNotebook = useCallback(
+    async (notebookId: string) => {
+      const current = view === "chat" ? activeKey : null;
+      if (!current) return;
+      const summary = sessions.find((s) => s.chatId === current);
+      if (!summary) return;
+      try {
+        await addSessionToNotebook(client, notebookId, summary.key);
+        void refreshNotebooks();
+      } catch {
+        // Ignore failure; the next refresh reconciles.
+      }
+    },
+    [client, view, activeKey, sessions, refreshNotebooks],
+  );
+
   useEffect(() => {
     if (loading) return;
     const knownChatIds = new Set(sessions.map((session) => session.chatId));
@@ -2673,6 +2775,17 @@ function Shell({
     onSelectChat(paneKey);
   }, [onSelectChat]);
 
+  const notebookSessionTitles = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const session of sessions) {
+      map[session.key] =
+        sidebarState.title_overrides?.[session.key]
+        ?? session.title
+        ?? deriveTitle(session.preview, session.key);
+    }
+    return map;
+  }, [sessions, sidebarState.title_overrides]);
+
   const onDetachWorkbenchPane = useCallback((tabKey: string, paneKey: string) => {
     updateWorkbenchState((current) => detachWorkbenchPane(current, tabKey, paneKey));
   }, [updateWorkbenchState]);
@@ -2767,6 +2880,17 @@ function Shell({
     onRequestRename,
     onToggleArchive,
     onRequestRenameTab,
+    notebooks,
+    notebookSessionTitles,
+    onOpenSessionFromNotebook: onSelectSidebarItem,
+    onCreateNotebook: () => setNotebookDialog({ mode: "create" }),
+    onEditNotebook: (notebook: Notebook) => setNotebookDialog({ mode: "edit", notebook }),
+    onAddCurrentSessionToNotebook: handleAddCurrentSessionToNotebook,
+    onRemoveSessionFromNotebook: (notebookId: string, sessionKey: string) => {
+      void handleRemoveSessionFromNotebook(notebookId, sessionKey);
+    },
+    onDeleteNotebook: (notebookId: string) => { void handleNotebookDelete(notebookId); },
+    onAddToNotebook: (sessionKey: string) => setAddToNotebookSessionKey(sessionKey),
     paneGroups: sidebarPaneGroups,
     onSelectPane: onSelectSidebarPane,
     onCreateTab: mobileWorkbench ? undefined : onCreateWorkbenchTab,
@@ -2940,6 +3064,30 @@ function Shell({
               />
             </Suspense>
           ) : null}
+          <AddToNotebookDialog
+            open={addToNotebookSessionKey !== null}
+            sessionKey={addToNotebookSessionKey}
+            notebooks={notebooks}
+            onClose={() => setAddToNotebookSessionKey(null)}
+            onPick={(notebookId) => {
+              if (addToNotebookSessionKey) {
+                void handleAddSessionToNotebook(
+                  notebookId,
+                  addToNotebookSessionKey,
+                );
+              }
+            }}
+            onCreateNew={() => setNotebookDialog({ mode: "create" })}
+          />
+          <NotebookEditDialog
+            open={notebookDialog !== null}
+            notebook={notebookDialog?.mode === "edit" ? notebookDialog.notebook : null}
+            onClose={() => setNotebookDialog(null)}
+            onSubmit={(values) => { void handleNotebookSubmit(values); }}
+            onDelete={notebookDialog?.mode === "edit"
+              ? (notebookId) => { void handleNotebookDelete(notebookId); }
+              : undefined}
+          />
         <main
           className={cn(
             "relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-background",

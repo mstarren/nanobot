@@ -27,8 +27,10 @@ import {
   SidebarSelectionHighlight,
 } from "@/components/SidebarSelectionHighlight";
 import { Button } from "@/components/ui/button";
+import { NotebooksPanel } from "@/components/notebooks/NotebooksPanel";
 import type {
   ChatSummary,
+  Notebook,
   SidebarViewState,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -87,6 +89,15 @@ interface SidebarProps {
   archivedCount?: number;
   defaultWorkspacePath?: string | null;
   hostChromeInset?: boolean;
+  notebooks?: Notebook[];
+  notebookSessionTitles?: Record<string, string>;
+  onOpenSessionFromNotebook?: (sessionKey: string) => void;
+  onCreateNotebook?: () => void;
+  onEditNotebook?: (notebook: Notebook) => void;
+  onAddCurrentSessionToNotebook?: (notebookId: string) => void;
+  onRemoveSessionFromNotebook?: (notebookId: string, sessionKey: string) => void;
+  onDeleteNotebook?: (notebookId: string) => void;
+  onAddToNotebook?: (sessionKey: string) => void;
 }
 
 type NavigatorWithUserAgentData = Navigator & {
@@ -251,6 +262,7 @@ export function Sidebar(props: SidebarProps) {
             onRequestRename={props.onRequestRename}
             onRequestRenameTab={props.onRequestRenameTab}
             onToggleArchive={props.onToggleArchive}
+            onAddToNotebook={props.onAddToNotebook}
             paneGroups={props.paneGroups}
             onSelectPane={props.onSelectPane}
             onCreateTab={props.onCreateTab}
@@ -279,6 +291,19 @@ export function Sidebar(props: SidebarProps) {
             actionMenuPortalContainer={
               props.containActionMenus ? menuPortalContainer : undefined
             }
+          />
+        )}
+        {!collapsed && (
+          <NotebooksPanel
+            notebooks={props.notebooks ?? []}
+            sessionTitles={props.notebookSessionTitles ?? {}}
+            activeSessionKey={props.activeKey}
+            onOpenSession={props.onOpenSessionFromNotebook ?? (() => {})}
+            onCreateNotebook={props.onCreateNotebook ?? (() => {})}
+            onEditNotebook={props.onEditNotebook ?? (() => {})}
+            onAddCurrentSession={props.onAddCurrentSessionToNotebook ?? (() => {})}
+            onRemoveSession={props.onRemoveSessionFromNotebook ?? (() => {})}
+            onDeleteNotebook={props.onDeleteNotebook ?? (() => {})}
           />
         )}
       </div>
