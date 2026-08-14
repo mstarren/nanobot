@@ -100,6 +100,15 @@ def build_tool_event_finish_payloads(context: AgentHookContext) -> list[dict[str
             "files": files,
             "embeds": embeds,
         }
+        # The todo tool's completion payload carries the parsed task list so
+        # the WebUI can render the session's plan from the event alone
+        # (Hermes parity: the gateway attaches ``todos`` on tool.complete).
+        if phase == "end" and getattr(tool_call, "name", "") == "todo":
+            from nanobot.agent.tools.todo import todo_payload_from_result
+
+            todo_payload = todo_payload_from_result(result)
+            if todo_payload is not None:
+                payload["todos"] = todo_payload.get("todos")
         if phase == "error":
             if isinstance(result, str) and result.strip():
                 payload["error"] = result.strip()

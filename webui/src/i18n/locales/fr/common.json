@@ -1399,6 +1399,7 @@
     "activityWorkingFor": "Travail en cours depuis {{duration}}",
     "activityWorked": "Travail terminé",
     "activityWorkedFor": "Travail terminé en {{duration}}",
+    "todoHeader": "Tâches {{done}}/{{total}}",
     "cliActivityRunningOne": "Utilisation de {{name}}",
     "cliActivityRanOne": "{{name}} utilisé",
     "cliActivityFailedOne": "Échec de {{name}}",

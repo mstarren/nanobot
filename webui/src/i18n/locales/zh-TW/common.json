@@ -1398,6 +1398,7 @@
     "activityWorkingFor": "處理中，已 {{duration}}",
     "activityWorked": "已處理",
     "activityWorkedFor": "已處理 {{duration}}",
+    "todoHeader": "任務 {{done}}/{{total}}",
     "cliActivityRunningOne": "正在使用 @{{name}}",
     "cliActivityRanOne": "已使用 @{{name}}",
     "cliActivityFailedOne": "使用 @{{name}} 失敗",

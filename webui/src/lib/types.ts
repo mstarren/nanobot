@@ -304,6 +304,8 @@ export interface ToolProgressEvent {
   files?: unknown[];
   embeds?: unknown[];
   approval?: ApprovalRecord;
+  /** Parsed task list attached to `todo` tool completions (Hermes parity). */
+  todos?: unknown;
 }
 
 export interface UIFileDiff {

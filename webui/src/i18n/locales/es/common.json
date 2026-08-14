@@ -1400,6 +1400,7 @@
     "activityWorkingFor": "Trabajando durante {{duration}}",
     "activityWorked": "Trabajo completado",
     "activityWorkedFor": "Trabajó durante {{duration}}",
+    "todoHeader": "Tareas {{done}}/{{total}}",
     "cliActivityRunningOne": "Usando {{name}}",
     "cliActivityRanOne": "Usó {{name}}",
     "cliActivityFailedOne": "Falló {{name}}",

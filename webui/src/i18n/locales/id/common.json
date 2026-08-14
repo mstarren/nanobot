@@ -1399,6 +1399,7 @@
     "activityWorkingFor": "Memproses selama {{duration}}",
     "activityWorked": "Selesai memproses",
     "activityWorkedFor": "Diproses selama {{duration}}",
+    "todoHeader": "Tugas {{done}}/{{total}}",
     "cliActivityRunningOne": "Menggunakan {{name}}",
     "cliActivityRanOne": "Menggunakan {{name}} selesai",
     "cliActivityFailedOne": "{{name}} gagal",

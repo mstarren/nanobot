@@ -1399,6 +1399,7 @@
     "activityWorkingFor": "Đang xử lý trong {{duration}}",
     "activityWorked": "Đã xử lý",
     "activityWorkedFor": "Đã xử lý trong {{duration}}",
+    "todoHeader": "Công việc {{done}}/{{total}}",
     "cliActivityRunningOne": "Đang dùng {{name}}",
     "cliActivityRanOne": "Đã dùng {{name}}",
     "cliActivityFailedOne": "{{name}} thất bại",

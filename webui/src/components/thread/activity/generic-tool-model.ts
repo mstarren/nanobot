@@ -75,6 +75,7 @@ const EXCLUDED_TOOLS = new Set([
   "run_shell",
   "shell",
   "terminal",
+  "todo",
   "web_fetch",
   "web_search",
   "x_search",

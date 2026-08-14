@@ -1399,6 +1399,7 @@
     "activityWorkingFor": "{{duration}} 동안 작업 중",
     "activityWorked": "작업함",
     "activityWorkedFor": "{{duration}} 동안 작업함",
+    "todoHeader": "작업 {{done}}/{{total}}",
     "cliActivityRunningOne": "{{name}} 사용 중",
     "cliActivityRanOne": "{{name}} 사용함",
     "cliActivityFailedOne": "{{name}} 실패",

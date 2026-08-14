@@ -1391,6 +1391,7 @@
     "activityWorkingFor": "Working for {{duration}}",
     "activityWorked": "Worked",
     "activityWorkedFor": "Worked for {{duration}}",
+    "todoHeader": "Tasks {{done}}/{{total}}",
     "cliActivityRunningOne": "Using {{name}}",
     "cliActivityRanOne": "Used {{name}}",
     "cliActivityFailedOne": "{{name}} failed",
