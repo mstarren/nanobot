@@ -58,6 +58,15 @@ export function ToolApprovalPanel({
   const resultText =
     error != null ? String(error) : result != null ? String(result) : "(no result)";
 
+  // Raw triage responses are often just the verdict word ("APPROVE") — or
+  // empty for reasoning models that exhausted the budget — which adds nothing
+  // next to the verdict badge and the Assessment block. Only surface the raw
+  // response when it actually carries an explanation after the verdict word,
+  // and do it consistently for every verdict.
+  const hasTriageDetail =
+    Boolean(approval.triage_raw) &&
+    !/^\s*(approve|deny|escalate)[\s.:"'`-]*$/i.test(approval.triage_raw.trim());
+
   return (
     <div className="min-w-0">
       <button
@@ -106,7 +115,14 @@ export function ToolApprovalPanel({
           className="mb-1 ml-[1.125rem] border-l-2 border-muted/45 pl-3 pr-1 text-[12px] leading-5 text-muted-foreground"
         >
           {approval.reason ? (
-            <p className="mb-1.5 text-[12.5px] text-foreground">{approval.reason}</p>
+            <div className="mb-1.5">
+              <p className="font-medium text-foreground">
+                {t("app.approval.assessment", { defaultValue: "Assessment" })}
+              </p>
+              <p className="mt-0.5 text-[12.5px] leading-5 text-foreground">
+                {approval.reason}
+              </p>
+            </div>
           ) : null}
           <div className="mb-1.5">
             <p className="font-medium text-foreground">
@@ -116,7 +132,7 @@ export function ToolApprovalPanel({
               {argsText}
             </pre>
           </div>
-          {approval.triage_raw ? (
+          {hasTriageDetail ? (
             <div className="mb-1.5">
               <p className="font-medium text-foreground">
                 {t("app.approval.triageResponse", { defaultValue: "Smart triage response" })}

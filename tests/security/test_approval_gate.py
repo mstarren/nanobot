@@ -12,6 +12,7 @@ from nanobot.security.approval_gate import (
     TRIAGE_ESCALATE,
     ApprovalGate,
     _looks_hardline,
+    _reasoning_detail,
     approval_prompt_text,
 )
 
@@ -74,6 +75,9 @@ async def test_smart_triage_verdict_parsing(answer: str, expected: str) -> None:
     # The system prompt must declare the tool call untrusted input.
     system_prompt = provider.last_messages[0]["content"]
     assert "UNTRUSTED INPUT" in system_prompt
+    # … and must demand a verdict + one-sentence explanation so the surfaced
+    # reason describes what was assessed, not just the verdict word.
+    assert "one-sentence explanation" in system_prompt
 
 
 async def test_smart_triage_failure_escalates_fail_closed() -> None:
@@ -94,6 +98,29 @@ async def test_smart_triage_disabled_escalates() -> None:
         FakeRuntime(FakeProvider("APPROVE")), "exec", {"command": "echo hi"}
     )
     assert verdict == TRIAGE_ESCALATE
+
+
+def test_reasoning_detail_uses_last_paragraph() -> None:
+    """The CoT fallback must surface the conclusion, not the opening
+    task-restatement paragraph."""
+    response = type(
+        "R",
+        (),
+        {
+            "reasoning_content": (
+                "We need to assess the tool call: `exec: echo hi`\n\n"
+                "The command only prints text and has no side effects, so it is safe."
+            )
+        },
+    )()
+    detail = _reasoning_detail(response)
+    assert "prints text and has no side effects" in detail
+    assert "We need to assess" not in detail
+
+
+def test_reasoning_detail_handles_empty_trace() -> None:
+    response = type("R", (), {"reasoning_content": ""})()
+    assert _reasoning_detail(response) == ""
 
 
 async def test_request_lifecycle_approve() -> None:
