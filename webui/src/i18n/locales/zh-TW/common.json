@@ -1426,7 +1426,10 @@
     "failed": "無法預覽這個檔案。",
     "routeMissing": "檔案預覽需要最新版本的閘道。請重新啟動 nanobot 閘道後再試一次。",
     "resize": "調整檔案預覽寬度",
-    "truncated": "檔案較大，因此預覽內容已截斷。"
+    "truncated": "檔案較大，因此預覽內容已截斷。",
+    "rendered": "渲染",
+    "source": "原始碼",
+    "viewToggle": "預覽檢視"
   },
   "code": {
     "fallbackLanguage": "程式碼",

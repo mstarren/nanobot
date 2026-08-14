@@ -1440,7 +1440,10 @@
     "failed": "无法预览这个文件。",
     "routeMissing": "文件预览需要最新的网关。请重启 nanobot gateway 后再试。",
     "resize": "调整文件预览宽度",
-    "truncated": "文件较大，当前只显示前半部分预览。"
+    "truncated": "文件较大，当前只显示前半部分预览。",
+    "rendered": "渲染",
+    "source": "源码",
+    "viewToggle": "预览视图"
   },
   "code": {
     "fallbackLanguage": "代码",

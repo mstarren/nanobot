@@ -1426,7 +1426,10 @@
     "failed": "이 파일을 미리 볼 수 없습니다.",
     "routeMissing": "파일 미리보기에는 최신 gateway가 필요합니다. nanobot gateway를 다시 시작한 뒤 다시 시도하세요.",
     "resize": "파일 미리보기 크기 조절",
-    "truncated": "파일이 커서 미리보기가 잘렸습니다."
+    "truncated": "파일이 커서 미리보기가 잘렸습니다.",
+    "rendered": "렌더링",
+    "source": "소스",
+    "viewToggle": "미리보기 보기"
   },
   "code": {
     "fallbackLanguage": "코드",

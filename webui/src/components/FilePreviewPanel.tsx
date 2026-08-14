@@ -5,8 +5,10 @@ import { useTranslation } from "react-i18next";
 
 import { CodeBlock } from "@/components/CodeBlock";
 import { splitFilePath } from "@/components/FileReferenceChip";
+import { MarkdownText } from "@/components/MarkdownText";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ApiError, fetchFilePreview } from "@/lib/api";
-import type { FilePreviewPayload } from "@/lib/types";
+import type { FilePreviewPayload, PreviewKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface FilePreviewPanelProps {
@@ -36,6 +38,7 @@ export function FilePreviewPanel({
   const { t } = useTranslation();
   const [state, setState] = useState<PreviewState>({ status: "loading" });
   const [entered, setEntered] = useState(false);
+  const [view, setView] = useState<"rendered" | "source">("rendered");
   const tokenRef = useRef(token);
   tokenRef.current = token;
 
@@ -61,6 +64,18 @@ export function FilePreviewPanel({
 
   const displayPath = state.status === "ready" ? state.payload.display_path : path;
   const previewPath = state.status === "ready" ? state.payload.path : displayPath;
+  const kind: PreviewKind = state.status === "ready"
+    ? (state.payload.kind ?? "text")
+    : "text";
+  const hasRenderedView = kind === "markdown" || kind === "html";
+  const showRendered = hasRenderedView && view === "rendered";
+
+  // Default markdown to the rendered view; everything else stays on source
+  // until the user asks for more (HTML gets an explicit render action).
+  useEffect(() => {
+    setView(kind === "markdown" ? "rendered" : "source");
+  }, [kind, path]);
+
   const normalizedPreviewPath = previewPath.replace(/\\/g, "/");
   const hasRootPrefix = normalizedPreviewPath.startsWith("/");
   const { name } = splitFilePath(displayPath);
@@ -196,6 +211,30 @@ export function FilePreviewPanel({
                 );
               })}
             </nav>
+            {hasRenderedView ? (
+              <div
+                className="shrink-0"
+                data-testid="file-preview-view-toggle"
+              >
+                <SegmentedControl
+                  value={view}
+                  onChange={setView}
+                  ariaLabel={t("filePreview.viewToggle", {
+                    defaultValue: "Preview view",
+                  })}
+                  options={[
+                    {
+                      value: "rendered",
+                      label: t("filePreview.rendered", { defaultValue: "Rendered" }),
+                    },
+                    {
+                      value: "source",
+                      label: t("filePreview.source", { defaultValue: "Source" }),
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={onClose}
@@ -237,15 +276,21 @@ export function FilePreviewPanel({
                     })}
                   </div>
                 ) : null}
-                <CodeBlock
-                  language={state.payload.language}
-                  code={state.payload.content}
-                  chrome="none"
-                  highlight
-                  showLineNumbers
-                  wrapLongLines={false}
-                  className="min-h-full"
-                />
+                {showRendered ? (
+                  <div className="min-h-full px-4 py-3">
+                    <MarkdownText>{state.payload.content}</MarkdownText>
+                  </div>
+                ) : (
+                  <CodeBlock
+                    language={state.payload.language}
+                    code={state.payload.content}
+                    chrome="none"
+                    highlight
+                    showLineNumbers
+                    wrapLongLines={false}
+                    className="min-h-full"
+                  />
+                )}
               </div>
             )}
           </div>

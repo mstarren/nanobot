@@ -1418,6 +1418,15 @@ export interface WebuiThreadPersistedPayload {
   workspace_scope?: WorkspaceScopePayload;
 }
 
+export type PreviewKind =
+  | "text"
+  | "markdown"
+  | "html"
+  | "csv"
+  | "image"
+  | "pdf"
+  | "video";
+
 export interface FilePreviewPayload {
   path: string;
   display_path: string;
@@ -1426,6 +1435,10 @@ export interface FilePreviewPayload {
   content: string;
   size: number;
   truncated: boolean;
+  /** Preview classification from the gateway (added in preview-kind-classification). */
+  kind?: PreviewKind;
+  /** Signed /api/media/... URL for image/pdf/video previews. */
+  media_url?: string | null;
 }
 
 export type Outbound =

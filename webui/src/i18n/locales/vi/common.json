@@ -1426,7 +1426,10 @@
     "failed": "Không thể xem trước tệp này.",
     "routeMissing": "Xem trước tệp cần gateway mới nhất. Hãy khởi động lại nanobot gateway rồi thử lại.",
     "resize": "Đổi kích thước bản xem trước tệp",
-    "truncated": "Bản xem trước bị cắt vì tệp này lớn."
+    "truncated": "Bản xem trước bị cắt vì tệp này lớn.",
+    "rendered": "Hiển thị",
+    "source": "Mã nguồn",
+    "viewToggle": "Chế độ xem trước"
   },
   "code": {
     "fallbackLanguage": "mã",

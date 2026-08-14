@@ -1426,7 +1426,10 @@
     "failed": "Impossible de prévisualiser ce fichier.",
     "routeMissing": "L’aperçu du fichier nécessite le dernier gateway. Redémarrez nanobot gateway puis réessayez.",
     "resize": "Redimensionner l’aperçu du fichier",
-    "truncated": "L’aperçu est tronqué car le fichier est volumineux."
+    "truncated": "L’aperçu est tronqué car le fichier est volumineux.",
+    "rendered": "Rendu",
+    "source": "Code source",
+    "viewToggle": "Aperçu"
   },
   "code": {
     "fallbackLanguage": "code",
