@@ -34,6 +34,7 @@ Pick the row that matches what you want to accomplish next:
 | Enable web search | [Configure Web Search](./guides/configure-web-search.md) |
 | Manage Agent Plugins, CLI Apps, or MCP integrations | [WebUI Apps](./webui.md#apps) |
 | Add an MCP tool server | [Configure MCP Tools](./guides/configure-mcp-tools.md) |
+| Gate risky tool calls behind human approval | [Approval Gate](./approval-gate.md) |
 | Generate images | [Image Generation](./image-generation.md) |
 | Schedule work or create a local trigger | [Automations](./automations.md) |
 | Understand and manage long-term memory | [Memory](./memory.md) |
