@@ -1418,6 +1418,10 @@
     "next": "次の画像",
     "close": "プレビューを閉じる"
   },
+  "markdown": {
+    "mermaidFailed": "この図を描画できませんでした。",
+    "mermaidAria": "Mermaid ダイアグラム"
+  },
   "filePreview": {
     "aria": "ファイルプレビュー",
     "breadcrumb": "ファイルパス",

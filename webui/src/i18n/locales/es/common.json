@@ -1419,6 +1419,10 @@
     "next": "Imagen siguiente",
     "close": "Cerrar vista previa"
   },
+  "markdown": {
+    "mermaidFailed": "No se pudo renderizar este diagrama.",
+    "mermaidAria": "Diagrama Mermaid"
+  },
   "filePreview": {
     "aria": "Vista previa de archivo",
     "breadcrumb": "Ruta del archivo",

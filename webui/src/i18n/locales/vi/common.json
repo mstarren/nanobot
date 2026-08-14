@@ -1418,6 +1418,10 @@
     "next": "Ảnh tiếp theo",
     "close": "Đóng xem trước"
   },
+  "markdown": {
+    "mermaidFailed": "Không thể hiển thị sơ đồ này.",
+    "mermaidAria": "Sơ đồ Mermaid"
+  },
   "filePreview": {
     "aria": "Xem trước tệp",
     "breadcrumb": "Đường dẫn tệp",

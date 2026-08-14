@@ -1432,6 +1432,10 @@
     "next": "Next image",
     "close": "Close image preview"
   },
+  "markdown": {
+    "mermaidFailed": "Could not render this diagram.",
+    "mermaidAria": "Mermaid diagram"
+  },
   "filePreview": {
     "aria": "File preview",
     "breadcrumb": "File path",

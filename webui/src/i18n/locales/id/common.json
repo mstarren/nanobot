@@ -1418,6 +1418,10 @@
     "next": "Gambar berikutnya",
     "close": "Tutup pratinjau"
   },
+  "markdown": {
+    "mermaidFailed": "Gagal merender diagram ini.",
+    "mermaidAria": "Diagram Mermaid"
+  },
   "filePreview": {
     "aria": "Pratinjau file",
     "breadcrumb": "Jalur file",
