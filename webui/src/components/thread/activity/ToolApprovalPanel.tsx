@@ -120,7 +120,7 @@ export function ToolApprovalPanel({
               <p className="font-medium text-foreground">
                 {t("app.approval.assessment", { defaultValue: "Assessment" })}
               </p>
-              <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
+              <pre className="mt-0.5 max-h-[25rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
                 {approval.reason}
               </pre>
             </div>
@@ -129,7 +129,7 @@ export function ToolApprovalPanel({
             <p className="font-medium text-foreground">
               {t("app.approval.fullCall", { defaultValue: "Tool call" })}
             </p>
-            <pre className="mt-0.5 max-h-40 overflow-auto rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
+            <pre className="mt-0.5 max-h-[25rem] overflow-auto rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
               {argsText}
             </pre>
           </div>
@@ -138,7 +138,7 @@ export function ToolApprovalPanel({
               <p className="font-medium text-foreground">
                 {t("app.approval.triageResponse", { defaultValue: "Smart triage response" })}
               </p>
-              <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
+              <pre className="mt-0.5 max-h-[25rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
                 {approval.triage_raw}
               </pre>
             </div>
@@ -147,7 +147,7 @@ export function ToolApprovalPanel({
             <p className="font-medium text-foreground">
               {t("app.approval.result", { defaultValue: "Result" })}
             </p>
-            <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
+            <pre className="mt-0.5 max-h-[25rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
               {resultText}
             </pre>
           </div>
