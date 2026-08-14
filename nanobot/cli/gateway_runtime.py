@@ -419,6 +419,38 @@ def _run_gateway(
     tools = ToolRegistry()
     mcp_provider = MCPProvider.from_config(config, tools)
 
+    # --- Approval gate (POC) ---------------------------------------------
+    # Configure the process-wide gate from NANOBOT_APPROVAL_* env vars and
+    # register a per-turn hook factory.  The factory resolves the triage
+    # runtime lazily through ``agent_holder`` so it can be wired before the
+    # AgentLoop exists.
+    from functools import partial
+
+    from nanobot.agent.hooks import create_approval_gate_hook
+    from nanobot.security.approval_gate import approval_gate_from_env, configure_approval_gate
+
+    configure_approval_gate(**approval_gate_from_env())
+    agent_holder: dict[str, Any] = {}
+
+    def _approval_runtime(session_key: str) -> Any:
+        agent_ref = agent_holder.get("agent")
+        if agent_ref is None:
+            return None
+        if session_key:
+            session = agent_ref.sessions.get_cached(session_key)
+            if session is not None:
+                try:
+                    return agent_ref.runtime_for_session(session)
+                except Exception:
+                    logger.exception("Approval gate: runtime_for_session failed")
+        return agent_ref.llm_runtime()
+
+    approval_hook_factory = partial(
+        create_approval_gate_hook,
+        bus=bus,
+        runtime_getter=_approval_runtime,
+    )
+
     # Create agent with cron service
     agent = AgentLoop.from_config(
         config, bus,
@@ -435,9 +467,13 @@ def _run_gateway(
         provider_signature=provider_snapshot.signature,
         hooks=[TokenUsageHook(timezone_name=config.agents.defaults.timezone)],
         local_trigger_store=trigger_store,
-        hook_factories=[create_file_edit_activity_hook],
+        hook_factories=[
+            create_file_edit_activity_hook,
+            approval_hook_factory,
+        ],
         tool_registry=tools,
     )
+    agent_holder["agent"] = agent
     def _schedule_webui_background(awaitable: Awaitable[None]) -> None:
         agent.schedule_background(cast(Coroutine[Any, Any, None], awaitable))
 

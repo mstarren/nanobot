@@ -407,6 +407,10 @@ class SystemSettingsHandler:
                 action.removeprefix("pairing-"),
                 operations,
             )
+        if action == "approval-list":
+            return self._approval_list()
+        if action == "approval-respond":
+            return self._approval_respond(request)
         if action == "mcp-list":
             return await self._mcp_presets(request, None, operations)
         if action.startswith("mcp-"):
@@ -869,6 +873,40 @@ class SystemSettingsHandler:
         except Exception:
             self.logger.exception("failed to load remote package install policy")
             return False
+
+    def _approval_list(self) -> SettingsRouteResult:
+        """List pending approval requests (WebUI polling surface)."""
+        from nanobot.security.approval_gate import get_approval_gate
+
+        gate = get_approval_gate()
+        if gate is None:
+            return SettingsRouteResult.failure(503, "approval gate not configured")
+        return SettingsRouteResult.success({"requests": gate.pending_payload()})
+
+    def _approval_respond(self, request: SettingsRequest) -> SettingsRouteResult:
+        """Resolve a pending approval request (approve|deny)."""
+        from nanobot.security.approval_gate import get_approval_gate
+
+        gate = get_approval_gate()
+        if gate is None:
+            return SettingsRouteResult.failure(503, "approval gate not configured")
+        request_id = (query_first(request.query, "id") or "").strip()
+        decision = (query_first(request.query, "decision") or "").strip().lower()
+        if not request_id or decision not in {"approve", "deny"}:
+            return SettingsRouteResult.failure(
+                400,
+                "'id' and 'decision' (approve|deny) are required",
+            )
+        ok, message = gate.respond(request_id, decision)
+        if not ok:
+            return SettingsRouteResult.failure(404, message)
+        return SettingsRouteResult.success(
+            {
+                "requests": gate.pending_payload(),
+                "ok": True,
+                "message": message,
+            }
+        )
 
     def _pairing_action(
         self,

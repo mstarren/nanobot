@@ -35,6 +35,7 @@ from nanobot.runtime_context import (
     detach_runtime_context,
     reattach_runtime_context,
 )
+from nanobot.security.approval_gate import ApprovalDeniedError
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.utils.helpers import (
     IncrementalThinkExtractor,
@@ -1462,7 +1463,16 @@ class AgentRunner:
             return prep_error + hint, event, (
                 RuntimeError(prep_error) if spec.fail_on_tool_error else None
             )
-        await hook.before_execute_tool(context, tool_call, tool, params)
+        try:
+            await hook.before_execute_tool(context, tool_call, tool, params)
+        except ApprovalDeniedError as exc:
+            event = {
+                "name": tool_call.name,
+                "status": "error",
+                "detail": "denied by user approval gate",
+            }
+            payload = f"Tool call DENIED by the user approval gate: {exc}"
+            return payload, event, None
         try:
             if tool is not None:
                 result = await tool.execute(**params)

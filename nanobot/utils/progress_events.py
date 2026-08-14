@@ -105,5 +105,11 @@ def build_tool_event_finish_payloads(context: AgentHookContext) -> list[dict[str
                 payload["error"] = result.strip()
             else:
                 payload["error"] = str(event.get("detail") or "Tool execution failed")
+        # Structured approval record (approval gate): attached by the hook onto
+        # the tool call; persists with the session and renders expandable in
+        # the WebUI (call, triage LLM response, status, tool result).
+        approval = getattr(tool_call, "approval_info", None) or event.get("approval")
+        if approval:
+            payload["approval"] = approval
         payloads.append(payload)
     return payloads

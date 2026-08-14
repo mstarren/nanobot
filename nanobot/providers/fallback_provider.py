@@ -193,6 +193,18 @@ class FallbackProvider(LLMProvider):
             lambda p, kw: p.chat(**kw), kwargs, has_streamed=None
         )
 
+    async def chat_independent(self, **kwargs: Any) -> LLMResponse:
+        """Auxiliary call that must NOT influence session provider routing.
+
+        Used by the approval-gate smart triage: always targets the primary
+        provider directly, bypassing fallback switching and the primary
+        trip/cooldown state. A failing auxiliary call can therefore never
+        trip the primary and silently move the session's own turns onto a
+        fallback model (which would evict the session's provider cache and
+        break conversation-state resume for up to the cooldown window).
+        """
+        return await self._primary.chat(**kwargs)
+
     async def chat_with_context(
         self,
         *,

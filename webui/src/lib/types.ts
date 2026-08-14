@@ -283,6 +283,16 @@ export interface GoalStateWsPayload {
   objective?: string;
 }
 
+export interface ApprovalRecord {
+  status: "auto_approved" | "approved" | "denied" | "pending" | "cancelled" | string;
+  verdict?: "approve" | "deny" | "escalate" | string;
+  reason?: string;
+  triage_raw?: string;
+  request_id?: string | null;
+  expires_in_seconds?: number;
+  decided_at_ms?: number;
+}
+
 export interface ToolProgressEvent {
   version?: number;
   phase?: "start" | "end" | "error" | string;
@@ -293,6 +303,7 @@ export interface ToolProgressEvent {
   error?: unknown;
   files?: unknown[];
   embeds?: unknown[];
+  approval?: ApprovalRecord;
 }
 
 export interface UIFileDiff {
@@ -954,6 +965,27 @@ export interface PairingPayload {
     channel?: string;
     sender_id?: string;
   };
+}
+
+/** One pending tool-call approval surfaced by the agent's approval gate. */
+export interface ApprovalRequestInfo {
+  id: string;
+  tool_name: string;
+  arguments: unknown;
+  verdict: "deny" | "escalate";
+  reason: string;
+  triage_raw?: string;
+  channel?: string;
+  chat_id?: string;
+  session_key?: string;
+  created_at_ms?: number;
+  expires_in_seconds?: number;
+}
+
+export interface ApprovalPayload {
+  requests: ApprovalRequestInfo[];
+  ok?: boolean;
+  message?: string;
 }
 
 export interface McpPresetField {
