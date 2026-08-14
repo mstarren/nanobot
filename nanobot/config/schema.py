@@ -424,6 +424,13 @@ class ToolsConfig(Base):
             "webui_allow_remote_package_install",
         ),
     )  # allow non-local WebUI clients to install optional packages and agent skills
+    webui_allow_remote_workspace: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "webuiAllowRemoteWorkspace",
+            "webui_allow_remote_workspace",
+        ),
+    )  # allow non-local WebUI clients to switch the project workspace (opt-in for remote setups; env NANOBOT_TOOLS__WEBUI_ALLOW_REMOTE_WORKSPACE)
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
     ssrf_whitelist: list[str] = Field(default_factory=list)  # CIDR ranges to exempt from SSRF blocking (e.g. ["100.64.0.0/10"] for Tailscale)
 

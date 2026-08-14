@@ -360,3 +360,75 @@ def test_remote_new_chat_only_allows_non_escalating_scope_change(
     else:
         with pytest.raises(WorkspaceScopeError, match="workspace controls are localhost-only"):
             resolve()
+
+
+def test_remote_project_switch_allowed_when_controls_enabled(tmp_path, monkeypatch) -> None:
+    """With remote workspace controls enabled, a remote client can switch the
+    active project to any existing directory (same trust as localhost)."""
+    monkeypatch.setattr("nanobot.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    default = tmp_path / "default"
+    other = tmp_path / "other"
+    default.mkdir()
+    other.mkdir()
+    controller = WebUIWorkspaceController(
+        session_manager=None,
+        default_workspace=default,
+        default_restrict_to_workspace=True,
+    )
+
+    scope = controller.scope_for_new_chat(
+        {
+            "workspace_scope": {
+                "project_path": str(other),
+                "access_mode": "restricted",
+            }
+        },
+        controls_available=True,
+    )
+
+    assert scope.project_path == other.resolve()
+    assert scope.access_mode == "restricted"
+
+
+def test_workspace_controls_available_remote_requires_flag(monkeypatch) -> None:
+    """Remote connections only get project-switch controls when the opt-in
+    ``webui_allow_remote_workspace`` config flag is set."""
+    from nanobot.webui.ws_http import GatewayHTTPHandler
+
+    handler = object.__new__(GatewayHTTPHandler)
+    handler._runtime_surface = "browser"
+    handler._log = MagicMock()
+    remote = MagicMock(remote_address=("203.0.113.7", 4321))
+    local = MagicMock(remote_address=("127.0.0.1", 4321))
+
+    # Flag off: localhost works, remote does not.
+    def flag_off() -> None:
+        raise AssertionError("load_config should not be called for localhost")
+
+    monkeypatch.setattr(
+        "nanobot.config.loader.load_config",
+        flag_off,
+    )
+    assert handler.workspace_controls_available(local) is True
+    assert handler.workspace_controls_available(remote) is False
+
+    # Flag on: remote gains project-switch controls.
+    class _FakeTools:
+        webui_allow_remote_workspace = True
+
+    class _FakeConfig:
+        tools = _FakeTools()
+
+    monkeypatch.setattr(
+        "nanobot.config.loader.load_config",
+        lambda: _FakeConfig(),
+    )
+    assert handler.workspace_controls_available(remote) is True
+
+    # Native runtime surface is always allowed even without the flag.
+    handler._runtime_surface = "native"
+    monkeypatch.setattr(
+        "nanobot.config.loader.load_config",
+        flag_off,
+    )
+    assert handler.workspace_controls_available(remote) is True

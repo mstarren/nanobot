@@ -367,7 +367,14 @@ class GatewayHTTPHandler:
         )
 
     def workspace_controls_available(self, connection: Any) -> bool:
-        return self._runtime_surface == "native" or _is_localhost(connection)
+        if self._runtime_surface == "native" or _is_localhost(connection):
+            return True
+        try:
+            from nanobot.config.loader import load_config
+
+            return bool(load_config().tools.webui_allow_remote_workspace)
+        except Exception:
+            return False
 
     def workspace_folder_picker_available(
         self,
