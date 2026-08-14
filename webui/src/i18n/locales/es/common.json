@@ -1436,7 +1436,9 @@
     "htmlWarning": "Este archivo contiene HTML. La renderización se ejecuta en un sandbox aislado: los scripts no pueden acceder a esta aplicación y las solicitudes de red salientes están bloqueadas.",
     "htmlFrame": "Vista previa HTML",
     "imageFailed": "No se pudo cargar esta imagen.",
-    "mediaUnavailable": "Este tipo de archivo no se puede previsualizar en esta pasarela."
+    "mediaUnavailable": "Este tipo de archivo no se puede previsualizar en esta pasarela.",
+    "pdfFrame": "Vista previa del PDF",
+    "csvRowLimit": "Mostrando las primeras {{count}} filas."
   },
   "code": {
     "fallbackLanguage": "código",

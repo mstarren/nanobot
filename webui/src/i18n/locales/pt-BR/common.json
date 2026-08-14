@@ -1449,7 +1449,9 @@
     "htmlWarning": "Este arquivo contém HTML. A renderização ocorre em um sandbox isolado: scripts não podem acessar este aplicativo e solicitações de rede externas são bloqueadas.",
     "htmlFrame": "Visualização HTML",
     "imageFailed": "Não foi possível carregar esta imagem.",
-    "mediaUnavailable": "Este tipo de arquivo não pode ser pré-visualizado neste gateway."
+    "mediaUnavailable": "Este tipo de arquivo não pode ser pré-visualizado neste gateway.",
+    "pdfFrame": "Visualização de PDF",
+    "csvRowLimit": "Exibindo as primeiras {{count}} linhas."
   },
   "code": {
     "fallbackLanguage": "código",

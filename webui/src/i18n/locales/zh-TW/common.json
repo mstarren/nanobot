@@ -1435,7 +1435,9 @@
     "htmlWarning": "此檔案包含 HTML。渲染會在隔離的沙箱中執行：腳本無法存取此應用程式，且對外網路請求會被阻止。",
     "htmlFrame": "HTML 預覽",
     "imageFailed": "無法載入此圖片。",
-    "mediaUnavailable": "此檔案類型無法在目前閘道中預覽。"
+    "mediaUnavailable": "此檔案類型無法在目前閘道中預覽。",
+    "pdfFrame": "PDF 預覽",
+    "csvRowLimit": "僅顯示前 {{count}} 列。"
   },
   "code": {
     "fallbackLanguage": "程式碼",

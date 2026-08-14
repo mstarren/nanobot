@@ -99,6 +99,19 @@ function PreviewImage({ src, alt, name }: { src: string; alt: string; name: stri
   );
 }
 
+function MediaUnavailable() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex h-full items-center justify-center px-8 text-center text-sm text-muted-foreground">
+      <p className="max-w-sm">
+        {t("filePreview.mediaUnavailable", {
+          defaultValue: "This file type is not previewable on this gateway.",
+        })}
+      </p>
+    </div>
+  );
+}
+
 function HtmlRenderInterstitial({
   onRender,
   onBack,
@@ -161,6 +174,136 @@ function HtmlPreviewFrame({ html, title }: { html: string; title: string }) {
     >
       {t("filePreview.htmlFrame", { defaultValue: "Rendered HTML preview" })}
     </iframe>
+  );
+}
+
+function PdfPreview({ src, name }: { src: string; name: string }) {
+  const { t } = useTranslation();
+  return (
+    <iframe
+      title={t("filePreview.pdfFrame", { defaultValue: "PDF preview" })}
+      src={src}
+      name={name}
+      referrerPolicy="no-referrer"
+      className="h-full w-full border-0"
+      data-testid="file-preview-pdf-frame"
+    />
+  );
+}
+
+function VideoPreview({ src, name }: { src: string; name: string }) {
+  return (
+    <div className="flex h-full items-center justify-center p-4">
+      <video
+        controls
+        src={src}
+        aria-label={name}
+        className="max-h-full max-w-full rounded-md"
+        data-testid="file-preview-video"
+      />
+    </div>
+  );
+}
+
+const CSV_PREVIEW_MAX_ROWS = 500;
+
+/** Minimal CSV parser supporting quoted fields and CRLF line endings. */
+function parseCsvRows(text: string, maxRows: number = CSV_PREVIEW_MAX_ROWS): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length && rows.length <= maxRows; i += 1) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i += 1;
+      row.push(field);
+      field = "";
+      rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function CsvPreview({ content }: { content: string }) {
+  const { t } = useTranslation();
+  const rows = useMemo(() => parseCsvRows(content), [content]);
+  const shownRows = rows.slice(0, CSV_PREVIEW_MAX_ROWS);
+  const header = shownRows[0] ?? [];
+  const body = shownRows.slice(1);
+  const columnCount = Math.max(header.length, ...body.map((r) => r.length), 0);
+
+  return (
+    <div className="overflow-auto">
+      <table
+        className="w-full border-collapse text-left text-[13px]"
+        data-testid="file-preview-csv-table"
+      >
+        <thead>
+          <tr className="border-b border-border/60 bg-muted/35">
+            {header.map((cell, index) => (
+              <th
+                key={`h-${index}`}
+                className="whitespace-nowrap px-3 py-2 font-medium text-foreground"
+              >
+                {cell}
+              </th>
+            ))}
+            {header.length < columnCount ? (
+              <th className="px-3 py-2" aria-hidden />
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((cells, rowIndex) => (
+            <tr
+              key={`r-${rowIndex}`}
+              className="border-b border-border/40 last:border-b-0"
+            >
+              {Array.from({ length: columnCount }, (_, colIndex) => (
+                <td
+                  key={`c-${colIndex}`}
+                  className="whitespace-nowrap px-3 py-1.5 text-foreground/88"
+                >
+                  {cells[colIndex] ?? ""}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > CSV_PREVIEW_MAX_ROWS ? (
+        <p className="px-3 py-2 text-xs text-muted-foreground">
+          {t("filePreview.csvRowLimit", {
+            defaultValue: "Showing the first {{count}} rows.",
+            count: CSV_PREVIEW_MAX_ROWS,
+          })}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -414,7 +557,12 @@ export function FilePreviewPanel({
                 </div>
               </div>
             ) : (
-              <div className={cn("min-h-full", (kind === "image" || kind === "html") && "h-full")}>
+              <div
+                className={cn(
+                  "min-h-full",
+                  (kind === "image" || kind === "html" || kind === "pdf") && "h-full",
+                )}
+              >
                 {state.payload.truncated ? (
                   <div className="mx-4 mt-3 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
                     {t("filePreview.truncated", {
@@ -430,14 +578,22 @@ export function FilePreviewPanel({
                       name={fileName}
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center px-8 text-center text-sm text-muted-foreground">
-                      <p className="max-w-sm">
-                        {t("filePreview.mediaUnavailable", {
-                          defaultValue: "This file type is not previewable on this gateway.",
-                        })}
-                      </p>
-                    </div>
+                    <MediaUnavailable />
                   )
+                ) : kind === "pdf" ? (
+                  mediaUrl ? (
+                    <PdfPreview src={mediaUrl} name={fileName} />
+                  ) : (
+                    <MediaUnavailable />
+                  )
+                ) : kind === "video" ? (
+                  mediaUrl ? (
+                    <VideoPreview src={mediaUrl} name={fileName} />
+                  ) : (
+                    <MediaUnavailable />
+                  )
+                ) : kind === "csv" ? (
+                  <CsvPreview content={state.payload.content} />
                 ) : kind === "html" && view === "rendered" ? (
                   htmlRenderArmed ? (
                     <HtmlPreviewFrame

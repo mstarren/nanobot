@@ -1449,7 +1449,9 @@
     "htmlWarning": "This file contains HTML. Rendering runs it in an isolated sandbox: scripts cannot access this app and outbound network requests are blocked.",
     "htmlFrame": "Rendered HTML preview",
     "imageFailed": "Could not load this image.",
-    "mediaUnavailable": "This file type is not previewable on this gateway."
+    "mediaUnavailable": "This file type is not previewable on this gateway.",
+    "pdfFrame": "PDF preview",
+    "csvRowLimit": "Showing the first {{count}} rows."
   },
   "code": {
     "fallbackLanguage": "code",

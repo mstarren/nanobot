@@ -1435,7 +1435,9 @@
     "htmlWarning": "Tệp này chứa HTML. Việc hiển thị chạy trong môi trường cách ly: tập lệnh không thể truy cập ứng dụng này và các yêu cầu mạng ra ngoài bị chặn.",
     "htmlFrame": "Xem trước HTML",
     "imageFailed": "Không thể tải hình ảnh này.",
-    "mediaUnavailable": "Loại tệp này không xem trước được trên cổng này."
+    "mediaUnavailable": "Loại tệp này không xem trước được trên cổng này.",
+    "pdfFrame": "Xem trước PDF",
+    "csvRowLimit": "Hiển thị {{count}} hàng đầu tiên."
   },
   "code": {
     "fallbackLanguage": "mã",

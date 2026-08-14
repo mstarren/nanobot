@@ -1435,7 +1435,9 @@
     "htmlWarning": "このファイルには HTML が含まれています。レンダリングは隔離されたサンドボックスで実行されます。スクリプトはこのアプリにアクセスできず、外部へのネットワーク要求はブロックされます。",
     "htmlFrame": "HTML プレビュー",
     "imageFailed": "この画像を読み込めませんでした。",
-    "mediaUnavailable": "このファイル形式はこのゲートウェイではプレビューできません。"
+    "mediaUnavailable": "このファイル形式はこのゲートウェイではプレビューできません。",
+    "pdfFrame": "PDF プレビュー",
+    "csvRowLimit": "先頭の {{count}} 行を表示しています。"
   },
   "code": {
     "fallbackLanguage": "コード",

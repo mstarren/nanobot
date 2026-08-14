@@ -388,4 +388,113 @@ describe("FilePreviewPanel", () => {
     expect(screen.getByTestId("mock-code-block")).toHaveTextContent("<h1>hi</h1>");
     expect(screen.queryByTestId("file-preview-html-frame")).not.toBeInTheDocument();
   });
+
+  it("renders PDF payloads in an iframe", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/doc.pdf",
+      display_path: "doc.pdf",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 2048,
+      truncated: false,
+      kind: "pdf",
+      media_url: "/api/media/sig/pdf",
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="doc.pdf"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const frame = await screen.findByTestId("file-preview-pdf-frame");
+    expect(frame).toHaveAttribute("src", "/api/media/sig/pdf");
+  });
+
+  it("renders video payloads with controls", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/clip.mp4",
+      display_path: "clip.mp4",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 102400,
+      truncated: false,
+      kind: "video",
+      media_url: "/api/media/sig/video",
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="clip.mp4"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const video = await screen.findByTestId("file-preview-video") as HTMLVideoElement;
+    expect(video).toHaveAttribute("src", "/api/media/sig/video");
+    expect(video.controls).toBe(true);
+  });
+
+  it("renders CSV payloads as a table", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/data.csv",
+      display_path: "data.csv",
+      project_path: "/workspace",
+      language: "csv",
+      content: "name,count\n\"alpha, inc\",3\nbeta,4\n",
+      size: 30,
+      truncated: false,
+      kind: "csv",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="data.csv"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const table = await screen.findByTestId("file-preview-csv-table");
+    expect(table).toHaveTextContent("name");
+    expect(table).toHaveTextContent("alpha, inc");
+    expect(table).toHaveTextContent("beta");
+    expect(screen.queryByTestId("mock-code-block")).not.toBeInTheDocument();
+  });
+
+  it("falls back for pdf/video payloads without a media URL", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/doc.pdf",
+      display_path: "doc.pdf",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 2048,
+      truncated: false,
+      kind: "pdf",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="doc.pdf"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    expect(
+      await screen.findByText("This file type is not previewable on this gateway."),
+    ).toBeInTheDocument();
+  });
 });
