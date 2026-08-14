@@ -554,16 +554,28 @@ class WebuiTurnCoordinator:
         cid = str(event.context.chat_id or "").strip()
         if not cid:
             return
+        blob = goal_state_ws_blob(event.session_metadata)
         await self.bus.publish_outbound(
             outbound_message_for_event(
                 channel=event.context.channel,
                 chat_id=cid,
                 event=GoalStateSyncEvent(
-                    goal_state=goal_state_ws_blob(event.session_metadata),
+                    goal_state=blob,
                 ),
                 metadata=event.context.metadata,
             ),
         )
+        if blob.get("active") and blob.get("ui_summary"):
+            # The goal tools rename the session to the goal's summary line;
+            # nudge the WebUI so the sidebar session list reflects the title.
+            await self.bus.publish_outbound(
+                outbound_message_for_event(
+                    channel=event.context.channel,
+                    chat_id=cid,
+                    event=SessionUpdatedEvent(scope="metadata"),
+                    metadata=event.context.metadata,
+                ),
+            )
 
     async def _handle_runtime_model_changed(self, event: RuntimeModelChanged) -> None:
         await self.bus.publish_outbound(

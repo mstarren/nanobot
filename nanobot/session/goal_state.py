@@ -8,6 +8,7 @@ for older sessions. Callers use ``goal_state_runtime_lines``, ``goal_state_ws_bl
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Mapping, MutableMapping, cast
 
 from nanobot.session.manager import SessionManager
@@ -15,9 +16,16 @@ from nanobot.session.manager import SessionManager
 GOAL_STATE_KEY = "goal_state"
 GOAL_COMMAND = "/goal"
 MAX_GOAL_OBJECTIVE_CHARS = 4000
+# Session title length cap, kept in parity with the WebUI auto-title limit
+# (``TITLE_MAX_CHARS`` in ``nanobot.session.webui_turns``).
+GOAL_TITLE_MAX_CHARS = 60
 # Older builds stored the same JSON blob under this key.
 _LEGACY_GOAL_STATE_SESSION_KEY = "thread_goal"
 _MAX_OBJECTIVE_WS = 600
+# Session metadata keys owned by the title machinery; literals mirror the
+# constants in ``nanobot.session.webui_turns`` (that module imports this one).
+_TITLE_METADATA_KEY = "title"
+_TITLE_USER_EDITED_METADATA_KEY = "title_user_edited"
 
 
 def _session_goal_raw(metadata: Mapping[str, Any] | None) -> Any:
@@ -93,6 +101,29 @@ def goal_state_runtime_lines(metadata: Mapping[str, Any] | None) -> list[str]:
     if hint:
         out.append(f"Summary: {hint}")
     return out
+
+
+def apply_goal_summary_title(
+    metadata: MutableMapping[str, Any],
+    summary: str | None,
+) -> bool:
+    """Rename a session to its goal summary line when one is present.
+
+    The goal tools pass the goal's ``ui_summary`` here so the session can be
+    identified by its sustained objective in the session list. A title the
+    user explicitly edited is respected and left untouched. Returns ``True``
+    when the title was (re)written.
+    """
+    summary = (summary or "").strip()
+    if not summary:
+        return False
+    if metadata.get(_TITLE_USER_EDITED_METADATA_KEY) is True:
+        return False
+    title = re.sub(r"\s+", " ", summary).strip()
+    if len(title) > GOAL_TITLE_MAX_CHARS:
+        title = title[: GOAL_TITLE_MAX_CHARS - 1].rstrip() + "…"
+    metadata[_TITLE_METADATA_KEY] = title
+    return True
 
 
 def goal_state_ws_blob(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
