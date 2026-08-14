@@ -4951,6 +4951,165 @@ def test_handle_file_preview_allows_paths_outside_workspace_in_full_access(tmp_p
     assert body["content"].splitlines() == ["value = 42"]
 
 
+def _preview_scope(workspace: Path):
+    from nanobot.security.workspace_access import default_workspace_scope
+
+    return default_workspace_scope(workspace.resolve(), True)
+
+
+def test_file_preview_kind_classifies_markdown_and_rewrites_images(tmp_path) -> None:
+    from nanobot.webui.file_preview import file_preview_payload
+
+    workspace = tmp_path / "workspace"
+    source = workspace / "notes" / "guide.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("![logo](logo.png)\n\nHello **world**.\n", encoding="utf-8")
+
+    payload = file_preview_payload(
+        "notes/guide.md",
+        scope=_preview_scope(workspace),
+        media_signer=lambda p: {"url": "/api/media/sig/payload", "name": p.name},
+        markdown_image_rewriter=lambda text: text.replace("logo.png", "/api/media/sig/payload"),
+    )
+
+    assert payload["kind"] == "markdown"
+    assert payload["language"] == "markdown"
+    assert payload["media_url"] is None
+    assert "/api/media/sig/payload" in payload["content"]
+
+
+def test_file_preview_kind_classifies_html(tmp_path) -> None:
+    from nanobot.webui.file_preview import file_preview_payload
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "page.html"
+    source.write_text("<!doctype html><h1>hi</h1>\n", encoding="utf-8")
+
+    payload = file_preview_payload("page.html", scope=_preview_scope(workspace))
+
+    assert payload["kind"] == "html"
+    assert payload["media_url"] is None
+    assert payload["content"].startswith("<!doctype html>")
+
+
+def test_file_preview_kind_classifies_csv(tmp_path) -> None:
+    from nanobot.webui.file_preview import file_preview_payload
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "data.csv"
+    source.write_text("a,b\n1,2\n", encoding="utf-8")
+
+    payload = file_preview_payload("data.csv", scope=_preview_scope(workspace))
+
+    assert payload["kind"] == "csv"
+    assert payload["content"].splitlines() == ["a,b", "1,2"]
+
+
+def test_file_preview_kind_sniffs_png_without_extension(tmp_path) -> None:
+    from nanobot.webui.file_preview import file_preview_payload
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "blob"
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+
+    payload = file_preview_payload(
+        "blob",
+        scope=_preview_scope(workspace),
+        media_signer=lambda p: {"url": "/api/media/sig/payload", "name": p.name},
+    )
+
+    assert payload["kind"] == "image"
+    assert payload["media_url"] == "/api/media/sig/payload"
+    assert payload["content"] == ""
+    assert payload["truncated"] is False
+
+
+def test_file_preview_kind_video_uses_media_url_without_content(tmp_path) -> None:
+    from nanobot.webui.file_preview import file_preview_payload
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "clip.mp4"
+    source.write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 1024)
+
+    payload = file_preview_payload(
+        "clip.mp4",
+        scope=_preview_scope(workspace),
+        media_signer=lambda p: {"url": "/api/media/sig/clip", "name": p.name},
+    )
+
+    assert payload["kind"] == "video"
+    assert payload["media_url"] == "/api/media/sig/clip"
+    assert payload["content"] == ""
+
+
+def test_file_preview_image_without_media_signer_rejected(tmp_path) -> None:
+    from nanobot.webui.file_preview import WebUIFilePreviewError, file_preview_payload
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "image.png"
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+
+    with pytest.raises(WebUIFilePreviewError) as exc:
+        file_preview_payload("image.png", scope=_preview_scope(workspace))
+    assert exc.value.status == 415
+
+
+def test_file_preview_probe_reports_image_as_available(tmp_path) -> None:
+    from nanobot.webui.file_preview import file_preview_availability_payload
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "image.png"
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+
+    payload = file_preview_availability_payload("image.png", scope=_preview_scope(workspace))
+
+    assert payload == {"available": True}
+
+
+def test_handle_file_preview_returns_signed_image_url(tmp_path, monkeypatch) -> None:
+    from urllib.parse import quote
+
+    from websockets.datastructures import Headers
+    from websockets.http11 import Request
+
+    def fake_media_dir(channel=None):
+        base = tmp_path / "media"
+        d = base / channel if channel else base
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    monkeypatch.setattr("nanobot.webui.media_gateway.get_media_dir", fake_media_dir)
+    monkeypatch.setattr("nanobot.webui.file_preview.get_media_dir", fake_media_dir)
+
+    workspace = tmp_path / "workspace"
+    source = workspace / "image.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"binary" * 100)
+
+    gateway = _basic_handler(MagicMock(), workspace_path=workspace)
+    gateway.tokens.api_tokens["tok"] = time.monotonic() + 300.0
+    key = "websocket:file-preview"
+    enc = quote(key, safe="")
+    req = Request(
+        f"/api/sessions/{enc}/file-preview?path={quote('image.png', safe='')}",
+        Headers([("Authorization", "Bearer tok")]),
+    )
+
+    resp = gateway.http._handle_file_preview(req, enc)
+
+    assert resp.status_code == 200
+    body = json.loads(resp.body.decode())
+    assert body["kind"] == "image"
+    assert body["media_url"].startswith("/api/media/")
+    assert body["content"] == ""
+
+
 def test_handle_webui_thread_get_backfills_legacy_missing_user_rows(
     tmp_path,
     monkeypatch,

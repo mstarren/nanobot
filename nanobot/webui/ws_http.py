@@ -819,7 +819,15 @@ class GatewayHTTPHandler:
             if is_probe:
                 payload = file_preview_availability_payload(path, scope=scope)
             else:
-                payload = file_preview_payload(path, scope=scope)
+                payload = file_preview_payload(
+                    path,
+                    scope=scope,
+                    media_signer=self.media.sign_or_stage_media_path,
+                    markdown_image_rewriter=lambda text: self.media.rewrite_local_markdown_images(
+                        text,
+                        workspace_path=scope.project_path,
+                    ),
+                )
         except WebUIFilePreviewError as e:
             if is_probe and e.status in {400, 403, 404, 415}:
                 return _http_json_response({"available": False})
