@@ -63,9 +63,10 @@ export function ToolApprovalPanel({
   // next to the verdict badge and the Assessment block. Only surface the raw
   // response when it actually carries an explanation after the verdict word,
   // and do it consistently for every verdict.
-  const hasTriageDetail =
-    Boolean(approval.triage_raw) &&
-    !/^\s*(approve|deny|escalate)[\s.:"'`-]*$/i.test(approval.triage_raw.trim());
+  const hasTriageDetail = Boolean(
+    approval.triage_raw &&
+      !/^\s*(approve|deny|escalate)[\s.:"'`-]*$/i.test(approval.triage_raw.trim()),
+  );
 
   return (
     <div className="min-w-0">
@@ -119,9 +120,9 @@ export function ToolApprovalPanel({
               <p className="font-medium text-foreground">
                 {t("app.approval.assessment", { defaultValue: "Assessment" })}
               </p>
-              <p className="mt-0.5 text-[12.5px] leading-5 text-foreground">
+              <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-2 font-mono text-[11.5px] leading-relaxed">
                 {approval.reason}
-              </p>
+              </pre>
             </div>
           ) : null}
           <div className="mb-1.5">
