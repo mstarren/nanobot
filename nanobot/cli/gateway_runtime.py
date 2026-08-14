@@ -716,6 +716,7 @@ def _run_gateway(
         webui_mcp_reload=mcp_provider.reload,
         webui_skill_state_action=_webui_skill_state_action,
         config_path=Path(config_path),
+        webui_subagent_manager=lambda: agent.subagents,
     )
 
     def _pick_heartbeat_target() -> tuple[str, str]:

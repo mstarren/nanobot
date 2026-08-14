@@ -104,6 +104,7 @@ class ChannelManager:
         webui_mcp_reload: Callable[[], Awaitable[dict[str, Any]]] | None = None,
         webui_skill_state_action: Callable[[set[str]], None] | None = None,
         config_path: Path | None = None,
+        webui_subagent_manager: Callable[[], Any | None] | None = None,
     ):
         if config_path is None:
             from nanobot.config.loader import get_config_path
@@ -124,6 +125,7 @@ class ChannelManager:
         self._webui_mcp_runtime_status = webui_mcp_runtime_status
         self._webui_mcp_reload = webui_mcp_reload
         self._webui_skill_state_action = webui_skill_state_action
+        self._webui_subagent_manager = webui_subagent_manager
         self.channels: dict[str, BaseChannel] = {}
         self._channel_owners: dict[str, str] = {}
         self._channel_runtime_specs: dict[str, tuple[str, str]] = {}
@@ -195,6 +197,7 @@ class ChannelManager:
                 mcp_reload=self._webui_mcp_reload,
                 skill_state_action=self._webui_skill_state_action,
                 logger=logger,
+                subagent_manager=self._webui_subagent_manager,
             )
             kwargs["gateway"] = gateway
         channel = cls(section, self.bus, **kwargs)

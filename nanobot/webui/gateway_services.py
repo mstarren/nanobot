@@ -69,6 +69,7 @@ def build_gateway_services(
     mcp_reload: Callable[[], Awaitable[dict[str, Any]]] | None = None,
     skill_state_action: Callable[[set[str]], None] | None = None,
     logger: Any = default_logger,
+    subagent_manager: Callable[[], Any | None] | None = None,
 ) -> GatewayServices:
     settings = WebUISettingsServices.create(config_path or get_config_path())
     tokens = GatewayTokenStore()
@@ -123,6 +124,7 @@ def build_gateway_services(
         mcp_reload=mcp_reload,
         skill_state_action=skill_state_action,
         log=logger,
+        subagent_manager=subagent_manager,
     )
     return GatewayServices(
         http=http,
