@@ -100,6 +100,15 @@ async def test_smart_triage_disabled_escalates() -> None:
     assert verdict == TRIAGE_ESCALATE
 
 
+def test_yolo_mode_defaults_off_and_toggles() -> None:
+    gate = ApprovalGate(gate_tools=["exec"])
+    assert gate.yolo_mode is False
+    gate.set_yolo_mode(True)
+    assert gate.yolo_mode is True
+    gate.set_yolo_mode(False)
+    assert gate.yolo_mode is False
+
+
 def test_reasoning_detail_uses_last_paragraph() -> None:
     """The CoT fallback must surface the conclusion, not the opening
     task-restatement paragraph."""

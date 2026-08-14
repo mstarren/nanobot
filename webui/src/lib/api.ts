@@ -1,6 +1,7 @@
 import type {
   ApiServicePayload,
   ApprovalPayload,
+  ApprovalRequestInfo,
   AutomationsPayload,
   AutomationUpdatePayload,
   ChannelConfigurePayload,
@@ -598,6 +599,20 @@ export async function fetchApprovalRequests(
     undefined,
     API_READ_TIMEOUT_MS,
   );
+}
+
+export interface YoloModePayload {
+  ok: boolean;
+  yolo_mode: boolean;
+  requests: ApprovalRequestInfo[];
+}
+
+/** Flip the approval gate's yolo mode (auto-approve gated calls). */
+export async function setYoloMode(
+  transport: WebUIMutationTransport,
+  enabled: boolean,
+): Promise<YoloModePayload> {
+  return mutation<YoloModePayload>(transport, "approval.yolo", { enabled });
 }
 
 export async function startChannelConnect(

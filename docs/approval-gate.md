@@ -55,12 +55,28 @@ response, the approval status, and the tool result.
 - **Fail-closed**: triage errors, disabled triage, and timeouts all escalate or
   deny; they never silently approve.
 - **Unbypassable floor**: the hardline patterns are evaluated before any
-  configuration and can never be turned off.
+  configuration and can never be turned off — **including in yolo mode**.
 - **Anti-injection hygiene**: the tool call is untrusted input to the triage
   model; operator policy only ever lives in the system prompt.
 - **Headless sessions** (cron, CLI, non-WebUI channels) have no interactive
   response path: an escalated call blocks until the timeout and is then
   denied. Plan automation accordingly (`NANOBOT_APPROVAL_TIMEOUT_SECONDS`).
+
+## Yolo mode (WebUI pill)
+
+Yolo mode is a runtime toggle surfaced as a **YOLO pill in the composer**, to
+the right of the workspace access mode. While ON, gated tool calls are
+**auto-approved without triage or a human prompt**; the approval record is
+still attached to the tool event (status `auto_approved`, reason "YOLO mode
+is enabled — approved without review.").
+
+- Toggled live from the WebUI via `POST /api/approval/yolo` (`{enabled}`); no
+  restart required. State is reported in the settings payload
+  (`approval.yolo_mode`) and resets to off when the gateway restarts.
+- The hardline DENY floor still applies: hardline commands are always
+  reviewed, never auto-approved by yolo mode.
+- Yolo mode does not change triage behavior for any call that is not gated
+  by the policy layer.
 
 ## Known limitations (POC)
 

@@ -56,6 +56,7 @@ import {
   updateModelConfiguration,
   updateMcpServerTools,
   updateNetworkSafetySettings,
+  setYoloMode,
   updateProviderSettings,
   updateSettings,
   updateSkillEnabled,
@@ -740,6 +741,22 @@ describe("webui API helpers", () => {
       },
       20_000,
     );
+  });
+
+  it("flips yolo mode through the approval mutation", async () => {
+    requestMutation.mockResolvedValueOnce({
+      ok: true,
+      yolo_mode: true,
+      requests: [],
+    });
+    const payload = await setYoloMode(mutationTransport, true);
+
+    expect(requestMutation).toHaveBeenCalledWith(
+      "approval.yolo",
+      { enabled: true },
+      20_000,
+    );
+    expect(payload.yolo_mode).toBe(true);
   });
 
   it("serializes image generation settings updates", async () => {

@@ -708,6 +708,10 @@ export interface SettingsPayload {
     requests_30d: number;
     updated_at?: string | null;
   };
+  approval?: {
+    /** Yolo mode: gated tool calls are auto-approved without review. */
+    yolo_mode: boolean;
+  };
   advanced: {
     restrict_to_workspace: boolean;
     workspace_sandbox?: {

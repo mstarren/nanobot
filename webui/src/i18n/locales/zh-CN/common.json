@@ -1351,6 +1351,12 @@
         "defaultShort": "默认",
         "full": "完全访问权限",
         "fullShort": "完全"
+      },
+      "yolo": {
+        "label": "YOLO",
+        "aria": "YOLO 模式：{{state}}",
+        "on": "YOLO 模式：开启 — 需审查的工具调用将自动批准，无需人工复核",
+        "off": "YOLO 模式：关闭 — 高风险工具调用会在运行前审查"
       }
     },
     "scrollToBottom": "滚动到底部",

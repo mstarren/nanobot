@@ -209,6 +209,7 @@ class ApprovalGate:
         timeout_seconds: float = 600.0,
         smart_policy: str = "",
         triage_model: str | None = None,
+        yolo_mode: bool = False,
     ) -> None:
         self._gate_tools = list(gate_tools) if gate_tools is not None else _default_gate_tools()
         self._gate_all = "all" in self._gate_tools
@@ -216,7 +217,27 @@ class ApprovalGate:
         self._timeout_seconds = timeout_seconds
         self._smart_policy = smart_policy
         self._triage_model = triage_model
+        self._yolo_mode = bool(yolo_mode)
         self._pending: dict[str, ApprovalRequest] = {}
+
+    # -- runtime toggles ----------------------------------------------------
+
+    @property
+    def yolo_mode(self) -> bool:
+        """Whether gated tool calls are auto-approved without review."""
+        return self._yolo_mode
+
+    def set_yolo_mode(self, enabled: bool) -> None:
+        """Flip yolo mode at runtime (WebUI pill; no restart needed).
+
+        The hardline DENY floor still applies: ``_looks_hardline`` calls are
+        always reviewed, never auto-approved by yolo mode.
+        """
+        self._yolo_mode = bool(enabled)
+        logger.info(
+            "Approval gate: yolo mode {}",
+            "enabled (auto-approving gated calls)" if self._yolo_mode else "disabled",
+        )
 
     # -- policy -----------------------------------------------------------
 
@@ -458,6 +479,7 @@ def configure_approval_gate(**kwargs: Any) -> ApprovalGate:
         timeout_seconds=kwargs.get("timeout_seconds", 600.0),
         smart_policy=kwargs.get("smart_policy", ""),
         triage_model=kwargs.get("triage_model"),
+        yolo_mode=kwargs.get("yolo_mode", False),
     )
     _gate = gate
     return gate

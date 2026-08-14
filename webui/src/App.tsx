@@ -79,6 +79,7 @@ import {
   fetchSettings,
   fetchWorkspaces,
   runPairingAction,
+  setYoloMode,
 } from "@/lib/api";
 import {
   createRuntimeHost,
@@ -1244,6 +1245,7 @@ function Shell({
   const skills = useSkills(getToken);
   const pageVisible = usePageVisibility();
   const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsPayload | null>(null);
+  const [yoloMode, setYoloModeState] = useState<boolean>(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [draftWorkspaceScope, setDraftWorkspaceScope] =
     useState<WorkspaceScopePayload | null>(null);
@@ -1326,6 +1328,27 @@ function Shell({
       cancelled = true;
     };
   }, [getToken]);
+
+  useEffect(() => {
+    if (settingsSnapshot?.approval) {
+      setYoloModeState(settingsSnapshot.approval.yolo_mode ?? false);
+    }
+  }, [settingsSnapshot]);
+
+  const onYoloModeChange = useCallback(
+    (enabled: boolean) => {
+      // Optimistic flip; reconcile with the gateway's answer and revert on error.
+      setYoloModeState(enabled);
+      void setYoloMode(client, enabled)
+        .then((res) => setYoloModeState(res.yolo_mode))
+        .catch(() => {
+          fetchSettings(getToken())
+            .then((payload) => setSettingsSnapshot(payload))
+            .catch(() => undefined);
+        });
+    },
+    [client, getToken],
+  );
 
   useEffect(() => {
     try {
@@ -3016,6 +3039,8 @@ function Shell({
                         workspaceError={workspaceError}
                         onWorkspaceScopeChange={applyWorkspaceScope}
                         settingsSnapshot={settingsSnapshot}
+                        yoloMode={yoloMode}
+                        onYoloModeChange={onYoloModeChange}
                         onOpenModelSettings={onOpenModelSettings}
                         skills={skills}
                       />
@@ -3073,6 +3098,8 @@ function Shell({
                         client.setWorkspaceScope(paneSession.chatId, next);
                       }}
                       settingsSnapshot={settingsSnapshot}
+                      yoloMode={yoloMode}
+                      onYoloModeChange={onYoloModeChange}
                       onOpenModelSettings={onOpenModelSettings}
                       skills={skills}
                     />

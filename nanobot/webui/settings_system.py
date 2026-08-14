@@ -105,6 +105,13 @@ def system_settings_payload(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         workspace=config.workspace_path,
     )
+    try:
+        from nanobot.security.approval_gate import get_approval_gate
+
+        gate = get_approval_gate()
+        yolo_mode = bool(gate.yolo_mode) if gate is not None else False
+    except Exception:  # noqa: BLE001 - settings must load even if the gate is unavailable
+        yolo_mode = False
     return {
         "runtime": {
             "config_path": str(config_path.expanduser()),
@@ -122,6 +129,9 @@ def system_settings_payload(
             "unified_session": defaults.unified_session,
         },
         "usage": token_usage_payload(timezone_name=defaults.timezone),
+        "approval": {
+            "yolo_mode": yolo_mode,
+        },
         "advanced": {
             "restrict_to_workspace": config.tools.restrict_to_workspace,
             "workspace_sandbox": sandbox_status.as_dict(),
@@ -411,6 +421,8 @@ class SystemSettingsHandler:
             return self._approval_list()
         if action == "approval-respond":
             return self._approval_respond(request)
+        if action == "approval-yolo":
+            return self._approval_yolo(request)
         if action == "mcp-list":
             return await self._mcp_presets(request, None, operations)
         if action.startswith("mcp-"):
@@ -905,6 +917,27 @@ class SystemSettingsHandler:
                 "requests": gate.pending_payload(),
                 "ok": True,
                 "message": message,
+            }
+        )
+
+    def _approval_yolo(self, request: SettingsRequest) -> SettingsRouteResult:
+        """Toggle yolo mode (auto-approve gated calls) at runtime."""
+        from nanobot.security.approval_gate import get_approval_gate
+
+        gate = get_approval_gate()
+        if gate is None:
+            return SettingsRouteResult.failure(503, "approval gate not configured")
+        enabled = (query_first(request.query, "enabled") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        gate.set_yolo_mode(enabled)
+        return SettingsRouteResult.success(
+            {
+                "ok": True,
+                "yolo_mode": gate.yolo_mode,
+                "requests": gate.pending_payload(),
             }
         )
 

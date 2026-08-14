@@ -64,6 +64,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   WorkspaceAccessMenu,
+  YoloModePill,
   WorkspaceProjectPicker,
 } from "@/components/thread/WorkspaceControls";
 import {
@@ -213,6 +214,9 @@ interface ThreadComposerProps {
   workspaceDefaultScope?: WorkspaceScopePayload | null;
   workspaceControls?: WorkspacesPayload["controls"] | null;
   workspaceScopeDisabled?: boolean;
+  /** Yolo mode (auto-approve gated tool calls) state + toggle. */
+  yoloMode?: boolean;
+  onYoloModeChange?: (enabled: boolean) => void;
   workspaceError?: string | null;
   onPickWorkspaceFolder?: () => Promise<string | null>;
   onWorkspaceScopeChange?: (scope: WorkspaceScopePayload) => void;
@@ -933,6 +937,8 @@ export function ThreadComposer({
   workspaceError = null,
   onPickWorkspaceFolder,
   onWorkspaceScopeChange,
+  yoloMode,
+  onYoloModeChange,
   pendingQueueKey = null,
   transcriptionProvider = null,
   ingressLimits = null,
@@ -2442,6 +2448,14 @@ export function ThreadComposer({
                 canUseFullAccess={workspaceControls?.can_use_full_access !== false}
                 isHero={isHero}
                 onChange={onWorkspaceScopeChange}
+              />
+            ) : null}
+            {yoloMode !== undefined && !workspaceControlsHidden ? (
+              <YoloModePill
+                enabled={yoloMode}
+                disabled={interactionDisabled}
+                isHero={isHero}
+                onChange={onYoloModeChange}
               />
             ) : null}
           </div>

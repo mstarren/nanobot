@@ -28,6 +28,7 @@ from nanobot.providers.base import ToolCallRequest
 from nanobot.security.approval_gate import (
     TRIAGE_APPROVE,
     ApprovalDeniedError,
+    _looks_hardline,
     approval_prompt_text,
     approval_ui_payload,
     get_approval_gate,
@@ -101,6 +102,24 @@ class ApprovalGateHook(AgentHook):
             else params
         )
         if not gate.needs_approval(tool_call.name, arguments):
+            return
+
+        if gate.yolo_mode and not _looks_hardline(tool_call.name, arguments):
+            # Yolo mode: skip triage and the human prompt, approve outright.
+            # The hardline DENY floor still applies and is always reviewed.
+            logger.info(
+                "Approval gate: yolo mode auto-approved tool={} call_id={}",
+                tool_call.name,
+                tool_call.id,
+            )
+            _attach_approval_info(
+                tool_call,
+                status="auto_approved",
+                verdict=TRIAGE_APPROVE,
+                reason="YOLO mode is enabled — approved without review.",
+                triage_raw="",
+                request_id=None,
+            )
             return
 
         runtime = self._runtime(session_key=self._session_key)

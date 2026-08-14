@@ -1351,6 +1351,12 @@
         "defaultShort": "Padrão",
         "full": "Acesso total",
         "fullShort": "Total"
+      },
+      "yolo": {
+        "label": "YOLO",
+        "aria": "Modo YOLO: {{state}}",
+        "on": "Modo YOLO: ATIVADO — chamadas de ferramentas são aprovadas sem revisão",
+        "off": "Modo YOLO: DESATIVADO — chamadas arriscadas são revisadas antes de executar"
       }
     },
     "scrollToBottom": "Rolar para o final",

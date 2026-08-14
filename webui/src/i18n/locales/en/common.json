@@ -1351,6 +1351,12 @@
         "defaultShort": "Default",
         "full": "Full Access",
         "fullShort": "Full"
+      },
+      "yolo": {
+        "label": "YOLO",
+        "aria": "Yolo mode: {{state}}",
+        "on": "Yolo mode: ON — gated tool calls are approved without review",
+        "off": "Yolo mode: OFF — risky tool calls are reviewed before running"
       }
     },
     "scrollToBottom": "Scroll to bottom",

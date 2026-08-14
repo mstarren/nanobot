@@ -43,8 +43,17 @@ def make_runtime(answer: str) -> FakeRuntime:
     return runtime
 
 
-def make_hook(bus: FakeBus, *, gate_tools: list[str] | None = None) -> ApprovalGateHook:
-    configure_approval_gate(gate_tools=gate_tools if gate_tools is not None else ["exec"], timeout_seconds=5)
+def make_hook(
+    bus: FakeBus,
+    *,
+    gate_tools: list[str] | None = None,
+    yolo_mode: bool = False,
+) -> ApprovalGateHook:
+    configure_approval_gate(
+        gate_tools=gate_tools if gate_tools is not None else ["exec"],
+        timeout_seconds=5,
+        yolo_mode=yolo_mode,
+    )
     return ApprovalGateHook(
         bus=bus,
         channel="websocket",
@@ -125,6 +134,41 @@ async def test_escalate_and_user_deny_raises_denied_error() -> None:
 async def test_hardline_command_gated_even_with_empty_tool_list() -> None:
     bus = FakeBus()
     hook = make_hook(bus, gate_tools=[])
+    hook._runtime_getter = lambda session_key: make_runtime("ESCALATE")
+
+    task = asyncio.create_task(
+        hook.before_execute_tool(
+            context(),
+            tool_call(arguments={"command": "rm " + "-rf /"}),
+            None,
+            {"command": "rm " + "-rf /"},
+        )
+    )
+    pending = await _wait_for_pending(get_approval_gate())
+    assert pending and pending[0]["tool_name"] == "exec"
+    ok, _ = get_approval_gate().respond(pending[0]["id"], "deny")
+    assert ok
+
+    with pytest.raises(ApprovalDeniedError):
+        await task
+
+
+async def test_yolo_mode_auto_approves_gated_call() -> None:
+    """Yolo mode skips triage + the human prompt and approves outright."""
+    bus = FakeBus()
+    hook = make_hook(bus, yolo_mode=True)
+    call = tool_call()
+    await hook.before_execute_tool(context(), call, None, {"command": "echo hi"})
+    assert bus.messages == []
+    assert get_approval_gate().pending_payload() == []
+    assert getattr(call, "approval_info", {}).get("status") == "auto_approved"
+    assert "YOLO" in getattr(call, "approval_info", {}).get("reason", "")
+
+
+async def test_yolo_mode_never_bypasses_hardline_deny() -> None:
+    """The hardline DENY floor stays in force even in yolo mode."""
+    bus = FakeBus()
+    hook = make_hook(bus, gate_tools=[], yolo_mode=True)
     hook._runtime_getter = lambda session_key: make_runtime("ESCALATE")
 
     task = asyncio.create_task(

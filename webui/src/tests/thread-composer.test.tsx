@@ -1047,6 +1047,49 @@ describe("ThreadComposer", () => {
     );
   });
 
+  it("renders the yolo mode pill to the right of the access mode and toggles", async () => {
+    const onYoloModeChange = vi.fn();
+    render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        yoloMode={false}
+        onYoloModeChange={onYoloModeChange}
+      />,
+    );
+
+    const toggle = screen.getByTestId("yolo-mode-toggle");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("YOLO")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(onYoloModeChange).toHaveBeenCalledWith(true);
+  });
+
+  it("reflects yolo mode on and disables the toggle while interacting", async () => {
+    const onYoloModeChange = vi.fn();
+    const { rerender } = render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        yoloMode
+        onYoloModeChange={onYoloModeChange}
+      />,
+    );
+    expect(screen.getByTestId("yolo-mode-toggle")).toHaveAttribute("aria-pressed", "true");
+
+    rerender(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        yoloMode
+        onYoloModeChange={onYoloModeChange}
+        disabled
+      />,
+    );
+    expect(screen.getByTestId("yolo-mode-toggle")).toBeDisabled();
+  });
+
   it("exposes full and compact workspace labels for container-driven compression", () => {
     render(
       <ThreadComposer
