@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import { AlertCircle, ChevronRight, Loader2, X } from "lucide-react";
+import { AlertCircle, ChevronRight, Loader2, ShieldAlert, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { CodeBlock } from "@/components/CodeBlock";
 import { splitFilePath } from "@/components/FileReferenceChip";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { MarkdownText } from "@/components/MarkdownText";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ApiError, fetchFilePreview } from "@/lib/api";
-import type { FilePreviewPayload, PreviewKind } from "@/lib/types";
+import type { FilePreviewPayload, PreviewKind, UIImage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface FilePreviewPanelProps {
@@ -26,6 +27,143 @@ type PreviewState =
   | { status: "error"; error: unknown }
   | { status: "ready"; payload: FilePreviewPayload };
 
+/**
+ * CSP injected into the preview iframe (prepended so the first policy
+ * wins, mirroring Open WebUI's IFRAME_CSP). Inline scripts/styles stay
+ * usable while outbound network calls (fetch/XHR/WebSocket) are blocked.
+ */
+const PREVIEW_IFRAME_CSP = [
+  "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:",
+  "connect-src 'none'",
+].join("; ");
+
+function htmlPreviewSrcDoc(html: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_IFRAME_CSP}">`;
+  const headMatch = /<head([^>]*)>/i.exec(html);
+  if (headMatch) {
+    const at = headMatch.index + headMatch[0].length;
+    return `${html.slice(0, at)}${meta}${html.slice(at)}`;
+  }
+  const doctypeMatch = /^\s*(<!doctype[^>]*>)/i.exec(html);
+  if (doctypeMatch) {
+    const at = doctypeMatch.index + doctypeMatch[0].length;
+    return `${html.slice(0, at)}${meta}${html.slice(at)}`;
+  }
+  return `${meta}${html}`;
+}
+
+function PreviewImage({ src, alt, name }: { src: string; alt: string; name: string }) {
+  const { t } = useTranslation();
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const images = useMemo<UIImage[]>(() => [{ url: src, name }], [src, name]);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
+        {!loaded && !failed ? (
+          <div className="absolute inset-0 grid place-items-center">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
+          </div>
+        ) : null}
+        {failed ? (
+          <p className="max-w-sm text-center text-sm text-muted-foreground">
+            {t("filePreview.imageFailed", {
+              defaultValue: "Could not load this image.",
+            })}
+          </p>
+        ) : (
+          <img
+            src={src}
+            alt={alt}
+            draggable={false}
+            decoding="async"
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+            onClick={() => setLightboxIndex(0)}
+            className={cn(
+              "max-h-full max-w-full cursor-zoom-in rounded-md object-contain shadow-sm",
+              !loaded && "invisible",
+            )}
+          />
+        )}
+      </div>
+      <ImageLightbox
+        images={images}
+        index={lightboxIndex}
+        onIndexChange={setLightboxIndex}
+        onOpenChange={(open) => setLightboxIndex(open ? 0 : null)}
+      />
+    </div>
+  );
+}
+
+function HtmlRenderInterstitial({
+  onRender,
+  onBack,
+}: {
+  onRender: () => void;
+  onBack: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex h-full items-center justify-center px-8">
+      <div className="max-w-sm text-center">
+        <ShieldAlert className="mx-auto mb-3 h-6 w-6 text-amber-500" aria-hidden />
+        <p className="text-sm leading-relaxed text-foreground/90">
+          {t("filePreview.htmlWarning", {
+            defaultValue:
+              "This file contains HTML. Rendering runs it in an isolated sandbox: scripts cannot access this app and outbound network requests are blocked.",
+          })}
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className={cn(
+              "inline-flex h-8 items-center justify-center rounded-md px-3 text-sm",
+              "text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+          >
+            {t("filePreview.htmlBack", { defaultValue: "Back to source" })}
+          </button>
+          <button
+            type="button"
+            onClick={onRender}
+            data-testid="file-preview-html-render"
+            className={cn(
+              "inline-flex h-8 items-center justify-center rounded-md bg-foreground px-3 text-sm font-medium",
+              "text-background transition-colors hover:bg-foreground/90",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+          >
+            {t("filePreview.htmlRender", { defaultValue: "Render HTML" })}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HtmlPreviewFrame({ html, title }: { html: string; title: string }) {
+  const { t } = useTranslation();
+  const srcDoc = useMemo(() => htmlPreviewSrcDoc(html), [html]);
+  return (
+    <iframe
+      title={title}
+      sandbox="allow-scripts allow-popups allow-forms allow-downloads"
+      srcDoc={srcDoc}
+      referrerPolicy="no-referrer"
+      className="h-full w-full border-0 bg-white"
+      data-testid="file-preview-html-frame"
+    >
+      {t("filePreview.htmlFrame", { defaultValue: "Rendered HTML preview" })}
+    </iframe>
+  );
+}
+
 export function FilePreviewPanel({
   sessionKey,
   path,
@@ -39,6 +177,7 @@ export function FilePreviewPanel({
   const [state, setState] = useState<PreviewState>({ status: "loading" });
   const [entered, setEntered] = useState(false);
   const [view, setView] = useState<"rendered" | "source">("rendered");
+  const [htmlRenderArmed, setHtmlRenderArmed] = useState(false);
   const tokenRef = useRef(token);
   tokenRef.current = token;
 
@@ -69,12 +208,19 @@ export function FilePreviewPanel({
     : "text";
   const hasRenderedView = kind === "markdown" || kind === "html";
   const showRendered = hasRenderedView && view === "rendered";
+  const mediaUrl = state.status === "ready" ? (state.payload.media_url ?? null) : null;
 
   // Default markdown to the rendered view; everything else stays on source
   // until the user asks for more (HTML gets an explicit render action).
   useEffect(() => {
     setView(kind === "markdown" ? "rendered" : "source");
   }, [kind, path]);
+
+  // Re-arm the HTML sandbox gate whenever a new file is opened so scripts
+  // never run without an explicit per-file confirmation.
+  useEffect(() => {
+    setHtmlRenderArmed(false);
+  }, [path]);
 
   const normalizedPreviewPath = previewPath.replace(/\\/g, "/");
   const hasRootPrefix = normalizedPreviewPath.startsWith("/");
@@ -268,7 +414,7 @@ export function FilePreviewPanel({
                 </div>
               </div>
             ) : (
-              <div className="min-h-full">
+              <div className={cn("min-h-full", (kind === "image" || kind === "html") && "h-full")}>
                 {state.payload.truncated ? (
                   <div className="mx-4 mt-3 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
                     {t("filePreview.truncated", {
@@ -276,7 +422,37 @@ export function FilePreviewPanel({
                     })}
                   </div>
                 ) : null}
-                {showRendered ? (
+                {kind === "image" ? (
+                  mediaUrl ? (
+                    <PreviewImage
+                      src={mediaUrl}
+                      alt={displayPath}
+                      name={fileName}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-8 text-center text-sm text-muted-foreground">
+                      <p className="max-w-sm">
+                        {t("filePreview.mediaUnavailable", {
+                          defaultValue: "This file type is not previewable on this gateway.",
+                        })}
+                      </p>
+                    </div>
+                  )
+                ) : kind === "html" && view === "rendered" ? (
+                  htmlRenderArmed ? (
+                    <HtmlPreviewFrame
+                      html={state.payload.content}
+                      title={t("filePreview.htmlFrame", {
+                        defaultValue: "Rendered HTML preview",
+                      })}
+                    />
+                  ) : (
+                    <HtmlRenderInterstitial
+                      onRender={() => setHtmlRenderArmed(true)}
+                      onBack={() => setView("source")}
+                    />
+                  )
+                ) : showRendered ? (
                   <div className="min-h-full px-4 py-3">
                     <MarkdownText>{state.payload.content}</MarkdownText>
                   </div>

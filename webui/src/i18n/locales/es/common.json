@@ -1430,7 +1430,13 @@
     "truncated": "La vista previa está truncada porque el archivo es grande.",
     "rendered": "Renderizado",
     "source": "Código fuente",
-    "viewToggle": "Vista previa"
+    "viewToggle": "Vista previa",
+    "htmlRender": "Renderizar HTML",
+    "htmlBack": "Volver al código fuente",
+    "htmlWarning": "Este archivo contiene HTML. La renderización se ejecuta en un sandbox aislado: los scripts no pueden acceder a esta aplicación y las solicitudes de red salientes están bloqueadas.",
+    "htmlFrame": "Vista previa HTML",
+    "imageFailed": "No se pudo cargar esta imagen.",
+    "mediaUnavailable": "Este tipo de archivo no se puede previsualizar en esta pasarela."
   },
   "code": {
     "fallbackLanguage": "código",

@@ -1429,7 +1429,13 @@
     "truncated": "L’aperçu est tronqué car le fichier est volumineux.",
     "rendered": "Rendu",
     "source": "Code source",
-    "viewToggle": "Aperçu"
+    "viewToggle": "Aperçu",
+    "htmlRender": "Afficher le HTML",
+    "htmlBack": "Retour au code source",
+    "htmlWarning": "Ce fichier contient du HTML. Le rendu s'exécute dans un bac à sable isolé : les scripts ne peuvent pas accéder à cette application et les requêtes réseau sortantes sont bloquées.",
+    "htmlFrame": "Aperçu HTML",
+    "imageFailed": "Impossible de charger cette image.",
+    "mediaUnavailable": "Ce type de fichier ne peut pas être prévisualisé sur cette passerelle."
   },
   "code": {
     "fallbackLanguage": "code",

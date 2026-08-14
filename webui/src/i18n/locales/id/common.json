@@ -1429,7 +1429,13 @@
     "truncated": "Pratinjau dipotong karena file ini besar.",
     "rendered": "Tampilan",
     "source": "Sumber",
-    "viewToggle": "Tampilan pratinjau"
+    "viewToggle": "Tampilan pratinjau",
+    "htmlRender": "Render HTML",
+    "htmlBack": "Kembali ke sumber",
+    "htmlWarning": "File ini berisi HTML. Rendering berjalan di sandbox terisolasi: skrip tidak dapat mengakses aplikasi ini dan permintaan jaringan keluar diblokir.",
+    "htmlFrame": "Pratinjau HTML",
+    "imageFailed": "Gagal memuat gambar ini.",
+    "mediaUnavailable": "Jenis file ini tidak dapat dipratinjau di gateway ini."
   },
   "code": {
     "fallbackLanguage": "kode",
