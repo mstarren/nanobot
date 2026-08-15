@@ -28,7 +28,6 @@ import {
   parseGenericToolTrace,
 } from "@/components/thread/activity/generic-tool-model";
 import { ReasoningRow } from "@/components/thread/activity/ReasoningRow";
-import { TodoPanel } from "@/components/thread/activity/TodoPanel";
 import { describeMcpActivity } from "@/components/thread/activity/mcp-activity-model";
 import { ThinkingReasoningShell } from "@/components/thread/activity/ThinkingReasoningShell";
 import { WebActivityRow } from "@/components/thread/activity/WebActivityRow";
@@ -46,7 +45,6 @@ import { useFileEditDisplayMode } from "@/hooks/useFileEditDisplayMode";
 import { useLogoFallback } from "@/hooks/useLogoFallback";
 import { logoFallbackUrls } from "@/lib/provider-brand";
 import { canonicalToolTrace, formatToolCallTrace } from "@/lib/tool-traces";
-import { latestSessionTodos } from "@/lib/todos";
 import { cn } from "@/lib/utils";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import type { CliAppInfo, McpPresetInfo, ToolProgressEvent, UIFileEdit, UIMessage } from "@/lib/types";
@@ -180,7 +178,6 @@ export function AgentActivityCluster({
     mcpCount,
     fileCount,
   } = countActivity(activityMessages, fileEdits, cliRuns, mcpRuns);
-  const latestTodos = useMemo(() => latestSessionTodos(activityMessages), [activityMessages]);
 
   const [userToggledOuter, setUserToggledOuter] = useState(false);
   const [outerOpenLocal, setOuterOpenLocal] = useState(false);
@@ -359,9 +356,6 @@ export function AgentActivityCluster({
         onToggle={toggleOuter}
         onScroll={onActivityScroll}
       >
-        {latestTodos ? (
-          <TodoPanel todos={latestTodos} active={isTurnStreaming} className="mb-1.5" />
-        ) : null}
         <ActivityMessageTimeline
           messages={activityMessages}
           active={isTurnStreaming}

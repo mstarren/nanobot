@@ -66,6 +66,7 @@ import {
   WorkspaceAccessMenu,
   WorkspaceProjectPicker,
 } from "@/components/thread/WorkspaceControls";
+import { TodoStateStrip } from "@/components/thread/TodoStateStrip";
 import {
   ModelPresetBadge,
   type ModelPresetOption,
@@ -101,6 +102,7 @@ import type {
 import {
   logoFallbackUrls,
 } from "@/lib/provider-brand";
+import type { TodoItem } from "@/lib/todos";
 import {
   isSideChannelLifecycle,
   slashCommandLifecycle,
@@ -208,6 +210,8 @@ interface ThreadComposerProps {
   onTranscribeAudio?: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
   /** Sustained objective for this chat (WebSocket ``goal_state``). */
   goalState?: GoalStateWsPayload;
+  /** Session task list (parsed ``todo`` tool state) shown under the goal. */
+  todos?: TodoItem[] | null;
   workspaceScope?: WorkspaceScopePayload | null;
   workspaceControlsHidden?: boolean;
   workspaceDefaultScope?: WorkspaceScopePayload | null;
@@ -925,6 +929,7 @@ export function ThreadComposer({
   surfaceRef,
   onTranscribeAudio,
   goalState,
+  todos,
   workspaceScope = null,
   workspaceControlsHidden = false,
   workspaceDefaultScope = null,
@@ -2331,6 +2336,7 @@ export function ThreadComposer({
           </div>
         ) : null}
         <GoalStateStrip goalState={goalState} />
+        <TodoStateStrip todos={todos} />
         <div className="relative">
           {hasMentionDecorations ? (
             <ComposerCliMentionOverlay

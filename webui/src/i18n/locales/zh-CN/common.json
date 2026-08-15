@@ -1343,6 +1343,9 @@
         "io": "无法读取该文件"
       },
       "goalStateCloseAria": "关闭目标",
+      "todoStateStrip": "任务 · {{label}}",
+      "todoStateExpandAria": "显示完整任务列表",
+      "todoStateCloseAria": "关闭任务列表",
       "workspace": {
         "accessAria": "工作区访问权限",
         "projectAria": "选择项目",

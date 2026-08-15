@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { SESSION_DRAG_TYPE } from "@/lib/session-drag";
+import type { TodoItem } from "@/lib/todos";
 import type { ChatSummary, CliAppInfo, McpPresetInfo, SlashCommand } from "@/lib/types";
 
 vi.mock("@/lib/imageEncode", () => ({
@@ -33,6 +34,13 @@ const COMMANDS: SlashCommand[] = [
     lifecycle: "side_channel",
     acceptsArgs: true,
   },
+];
+
+const TODO_PLAN: TodoItem[] = [
+  { id: "1", content: "Research Hermes todo display", status: "completed" },
+  { id: "2", content: "Port the backend todo tool", status: "in_progress" },
+  { id: "3", content: "Render the task list in the WebUI", status: "pending" },
+  { id: "4", content: "Open the PR", status: "cancelled" },
 ];
 
 const CLI_APPS: CliAppInfo[] = [
@@ -1385,6 +1393,47 @@ describe("ThreadComposer", () => {
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveTextContent("Short summary for strip");
     expect(dialog).toHaveTextContent(longObjective);
+  });
+
+  it("renders the task strip under the goal strip when both are shown", () => {
+    const { container } = render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        goalState={{
+          active: true,
+          objective: "Ship the release",
+          ui_summary: "Preparing release",
+        }}
+        todos={TODO_PLAN}
+      />,
+    );
+
+    const drawers = container.querySelectorAll("[data-composer-status-drawer]");
+    expect(drawers).toHaveLength(2);
+    expect(drawers[0]).toHaveTextContent("Goal · Preparing release");
+    expect(drawers[1]).toHaveTextContent("Tasks · Port the backend todo tool");
+    expect(drawers[1].getAttribute("data-state")).toBe("open");
+  });
+
+  it("expands the task list from the composer into an anchored panel", async () => {
+    render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        todos={TODO_PLAN}
+      />,
+    );
+
+    expect(screen.getByTestId("todo-strip-label")).toHaveTextContent(
+      "Tasks · Port the backend todo tool",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show full task list" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Tasks 1/3");
+    expect(screen.getAllByTestId("todo-item")).toHaveLength(4);
+    expect(screen.getByTestId("todo-glyph-in-progress")).toBeInTheDocument();
   });
 
   it("opens a slash command palette and inserts the selected command", () => {

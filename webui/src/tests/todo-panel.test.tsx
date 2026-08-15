@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TodoPanel } from "@/components/thread/activity/TodoPanel";
+import { TodoStateStrip } from "@/components/thread/TodoStateStrip";
 import {
   latestSessionTodos,
   parseTodos,
@@ -9,7 +9,7 @@ import {
   type TodoItem,
 } from "@/lib/todos";
 import type { ToolProgressEvent, UIMessage } from "@/lib/types";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 const PLAN: TodoItem[] = [
   { id: "1", content: "Research hermes todo display", status: "completed" },
@@ -126,19 +126,40 @@ describe("todoListActive", () => {
   });
 });
 
-describe("TodoPanel", () => {
-  it("renders nothing for an empty list", () => {
-    const { container } = render(<TodoPanel todos={[]} />);
+describe("TodoStateStrip", () => {
+  it("renders nothing for an empty or missing list", () => {
+    const { container } = render(<TodoStateStrip todos={[]} />);
     expect(container.firstChild).toBeNull();
+    const none = render(<TodoStateStrip todos={null} />);
+    expect(none.container.firstChild).toBeNull();
+    const undefinedStrip = render(<TodoStateStrip />);
+    expect(undefinedStrip.container.firstChild).toBeNull();
   });
 
-  it("shows Tasks done/total counting non-cancelled items", () => {
-    render(<TodoPanel todos={PLAN} />);
+  it("shows the current in_progress task in the collapsed strip", () => {
+    render(<TodoStateStrip todos={PLAN} />);
+    expect(screen.getByTestId("todo-strip-label")).toHaveTextContent(
+      "Tasks · Port the backend todo tool",
+    );
+  });
+
+  it("falls back to Tasks done/total when nothing is in progress yet", () => {
+    const queued = [
+      { id: "1", content: "a", status: "completed" as const },
+      { id: "2", content: "b", status: "pending" as const },
+      { id: "3", content: "c", status: "pending" as const },
+      { id: "4", content: "d", status: "cancelled" as const },
+    ];
+    render(<TodoStateStrip todos={queued} />);
+    expect(screen.getByTestId("todo-strip-label")).toHaveTextContent("Tasks 1/3");
+  });
+
+  it("expands into a panel with the full list and Hermes status glyphs", () => {
+    render(<TodoStateStrip todos={PLAN} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show full task list" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
     expect(screen.getByTestId("todo-panel-header")).toHaveTextContent("Tasks 1/3");
-  });
-
-  it("renders one row per item with the Hermes status glyphs", () => {
-    render(<TodoPanel todos={PLAN} />);
     const items = screen.getAllByTestId("todo-item");
     expect(items).toHaveLength(4);
     expect(screen.getByTestId("todo-glyph-completed")).toBeInTheDocument();
@@ -148,14 +169,14 @@ describe("TodoPanel", () => {
     expect(screen.getByText("Port the backend todo tool")).toBeInTheDocument();
   });
 
-  it("marks the panel active while the turn runs and the list is open", () => {
-    const { container, rerender } = render(
-      <TodoPanel todos={PLAN} active={false} />,
+  it("closes the expanded panel through its close button", () => {
+    render(<TodoStateStrip todos={PLAN} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show full task list" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close task list" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId("todo-strip-label")).toHaveTextContent(
+      "Tasks · Port the backend todo tool",
     );
-    expect(container.querySelector('[data-todo-active="true"]')).toBeNull();
-    rerender(<TodoPanel todos={PLAN} active />);
-    expect(container.querySelector('[data-todo-active="true"]')).not.toBeNull();
-    rerender(<TodoPanel todos={[PLAN[0]]} active />);
-    expect(container.querySelector('[data-todo-active="true"]')).toBeNull();
   });
 });
