@@ -1013,6 +1013,11 @@ export function useNanobotStream(
           eventSegmentId = detachedActivitySegmentId();
           fileEditSegmentRef.current = eventSegmentId;
         }
+        // Guard against a stale late write: the setMessages updater runs
+        // asynchronously, and a reasoning_delta (or any clear) may have
+        // invalidated the segment since the handler captured it. Only
+        // re-establish the ref when nothing cleared it in the meantime.
+        const handlerSegmentId = eventSegmentId;
         setMessages((prev) => {
           let segmentId = eventSegmentId;
           const base = stripCoveredFileEditToolHintsFromMessages(prev, normalized, turn);
@@ -1020,7 +1025,9 @@ export function useNanobotStream(
           if (targetIndex !== null) {
             const target = base[targetIndex];
             segmentId = target.activitySegmentId ?? segmentId ?? detachedActivitySegmentId();
-            if (opensFileEditPhase) fileEditSegmentRef.current = segmentId;
+            if (opensFileEditPhase && fileEditSegmentRef.current === handlerSegmentId) {
+              fileEditSegmentRef.current = segmentId;
+            }
             const merged: UIMessage = {
               ...target,
               fileEdits: mergeFileEdits(target.fileEdits, normalized),
@@ -1030,7 +1037,9 @@ export function useNanobotStream(
             return replaceMessageAt(base, targetIndex, merged);
           }
           segmentId = segmentId ?? detachedActivitySegmentId();
-          if (opensFileEditPhase) fileEditSegmentRef.current = segmentId;
+          if (opensFileEditPhase && fileEditSegmentRef.current === handlerSegmentId) {
+            fileEditSegmentRef.current = segmentId;
+          }
           return [
             ...base,
             {
