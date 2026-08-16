@@ -851,7 +851,11 @@ describe("MessageBubble", () => {
     const preview = screen.getByText("hidden until expanded");
     expect(preview).toBeInTheDocument();
     expect(screen.getByText("The answer is 42.")).toBeInTheDocument();
-    expect(preview.closest('[data-testid="activity-step"]')).toHaveClass("mb-2");
+    // Caller spacing lands on the outermost wrapper, not the row grid, so it is
+    // identical whether the reasoning is collapsed or expanded.
+    const step = preview.closest('[data-testid="activity-step"]');
+    expect(step).not.toHaveClass("mb-2");
+    expect(step?.parentElement?.parentElement).toHaveClass("mb-2");
     expect(screen.queryByText("Thinking")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /thinking/i })).not.toBeInTheDocument();
   });

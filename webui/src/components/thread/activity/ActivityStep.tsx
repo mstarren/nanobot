@@ -18,6 +18,10 @@ export interface ActivityStepProps {
   labelClassName?: string;
   markerClassName?: string;
   style?: CSSProperties;
+  /** Tooltip text for the activity line (falls back to the string label). */
+  title?: string;
+  /** Optional trailing node rendered after the label inside the line (e.g. a chevron). */
+  trailing?: ReactNode;
 }
 
 export function ActivityStep({
@@ -32,6 +36,8 @@ export function ActivityStep({
   labelClassName,
   markerClassName,
   style,
+  title,
+  trailing,
 }: ActivityStepProps) {
   return (
     <div
@@ -67,7 +73,7 @@ export function ActivityStep({
       <div className={cn("min-w-0", contentClassName)}>
         <div
           data-testid="activity-line"
-          title={typeof label === "string" ? label : undefined}
+          title={title ?? (typeof label === "string" ? label : undefined)}
           className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap"
         >
           <StreamingLabelSheen
@@ -80,6 +86,7 @@ export function ActivityStep({
           >
             {label}
           </StreamingLabelSheen>
+          {trailing}
         </div>
       </div>
     </div>

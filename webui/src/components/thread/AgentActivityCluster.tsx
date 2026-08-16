@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -48,8 +48,6 @@ import { canonicalToolTrace, formatToolCallTrace } from "@/lib/tool-traces";
 import { cn } from "@/lib/utils";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import type { CliAppInfo, McpPresetInfo, ToolProgressEvent, UIFileEdit, UIMessage } from "@/lib/types";
-
-const ACTIVITY_SCROLL_NEAR_BOTTOM_PX = 24;
 
 export { isAgentActivityMember, isReasoningOnlyAssistant };
 
@@ -140,7 +138,7 @@ interface AgentActivityClusterProps {
 
 /**
  * Outer fold wrapping interleaved reasoning-only assistant rows and tool-trace rows.
- * Fixed max height with inner scroll and a single flat list of activity rows.
+ * Uncapped single flat list of activity rows (no inner scrollport).
  */
 export function AgentActivityCluster({
   messages,
@@ -183,11 +181,6 @@ export function AgentActivityCluster({
   const [outerOpenLocal, setOuterOpenLocal] = useState(false);
   const [completionHoldOpen, setCompletionHoldOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const [activityScrollFade, setActivityScrollFade] = useState({ top: false, bottom: false });
-  const activityScrollRef = useRef<HTMLDivElement>(null);
-  const activityContentRef = useRef<HTMLDivElement>(null);
-  const autoFollowActivityRef = useRef(true);
-  const scrollFrameRef = useRef<number | null>(null);
   const wasTurnStreamingRef = useRef(isTurnStreaming);
   const wasTurnStreaming = wasTurnStreamingRef.current;
   /** Live work stays open; completed work briefly shows the done state, then tucks away. */
@@ -230,75 +223,11 @@ export function AgentActivityCluster({
           defaultValue: "Thought for {{duration}}",
         });
 
-  const cancelActivityScrollFrame = useCallback(() => {
-    if (scrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(scrollFrameRef.current);
-      scrollFrameRef.current = null;
-    }
-  }, []);
-
-  const syncActivityScrollFade = useCallback(() => {
-    const el = activityScrollRef.current;
-    if (!el) return;
-    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
-    const scrollTop = Math.min(maxScrollTop, Math.max(0, el.scrollTop));
-    const next = {
-      top: scrollTop > 1,
-      bottom: maxScrollTop - scrollTop > 1,
-    };
-    setActivityScrollFade((current) =>
-      current.top === next.top && current.bottom === next.bottom ? current : next,
-    );
-  }, []);
-
-  const scrollActivityToBottom = useCallback(() => {
-    const el = activityScrollRef.current;
-    if (!el) return;
-    el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
-    syncActivityScrollFade();
-  }, [syncActivityScrollFade]);
-
-  const scheduleActivityScrollToBottom = useCallback(() => {
-    cancelActivityScrollFrame();
-    scrollFrameRef.current = window.requestAnimationFrame(() => {
-      scrollFrameRef.current = null;
-      scrollActivityToBottom();
-    });
-  }, [cancelActivityScrollFrame, scrollActivityToBottom]);
-
   const toggleOuter = () => {
     const nextOpen = userToggledOuter ? !outerOpenLocal : !outerExpanded;
-    if (nextOpen) {
-      autoFollowActivityRef.current = true;
-    }
     setUserToggledOuter(true);
     setOuterOpenLocal(nextOpen);
   };
-
-  useLayoutEffect(() => {
-    if (!outerExpanded || !autoFollowActivityRef.current) return;
-    scheduleActivityScrollToBottom();
-  }, [outerExpanded, activityMessages, isTurnStreaming, scheduleActivityScrollToBottom]);
-
-  useEffect(() => {
-    if (!outerExpanded) {
-      autoFollowActivityRef.current = true;
-      return;
-    }
-    const target = activityContentRef.current;
-    if (!target || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      if (autoFollowActivityRef.current) {
-        scheduleActivityScrollToBottom();
-      } else {
-        syncActivityScrollFade();
-      }
-    });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [outerExpanded, scheduleActivityScrollToBottom, syncActivityScrollFade]);
-
-  useEffect(() => cancelActivityScrollFrame, [cancelActivityScrollFrame]);
 
   useEffect(() => {
     if (!isTurnStreaming || !pageVisible) return undefined;
@@ -320,14 +249,6 @@ export function AgentActivityCluster({
     return () => window.clearTimeout(timeout);
   }, [isTurnStreaming, userToggledOuter]);
 
-  const onActivityScroll = useCallback(() => {
-    const el = activityScrollRef.current;
-    if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    autoFollowActivityRef.current = distance < ACTIVITY_SCROLL_NEAR_BOTTOM_PX;
-    syncActivityScrollFade();
-  }, [syncActivityScrollFade]);
-
   if (!hasVisibleActivity && !isTurnStreaming) return null;
 
   if (hasOnlyFileActivity) {
@@ -348,13 +269,8 @@ export function AgentActivityCluster({
         active={isTurnStreaming}
         expanded={outerExpanded}
         label={thoughtLabel}
-        viewportRef={activityScrollRef}
-        contentRef={activityContentRef}
-        fadeTop={activityScrollFade.top}
-        fadeBottom={activityScrollFade.bottom}
         hasDetails={hasVisibleActivity}
         onToggle={toggleOuter}
-        onScroll={onActivityScroll}
       >
         <ActivityMessageTimeline
           messages={activityMessages}

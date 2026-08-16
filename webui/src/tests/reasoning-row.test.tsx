@@ -47,4 +47,62 @@ describe("ReasoningRow", () => {
     // The fallback label renders inside the header (compact preview path).
     expect(screen.getByTestId("activity-step")).toHaveTextContent("Thinking");
   });
+
+  it("links the disclosure button to its full-text region", () => {
+    render(<ReasoningRow text="some reasoning" streaming={false} />);
+    const toggle = screen.getByTestId("reasoning-toggle");
+    fireEvent.click(toggle);
+
+    const full = screen.getByTestId("reasoning-full-text");
+    const controls = toggle.getAttribute("aria-controls");
+    expect(controls).toBeTruthy();
+    expect(full).toHaveAttribute("id", controls);
+  });
+
+  it("gives multiple reasoning rows unique disclosure targets", () => {
+    render(
+      <>
+        <ReasoningRow text="first reasoning" streaming={false} />
+        <ReasoningRow text="second reasoning" streaming={false} />
+      </>,
+    );
+    const toggles = screen.getAllByTestId("reasoning-toggle");
+
+    fireEvent.click(toggles[0]);
+    fireEvent.click(toggles[1]);
+
+    const controls = toggles.map((toggle) => toggle.getAttribute("aria-controls"));
+    expect(controls[0]).toBeTruthy();
+    expect(controls[1]).toBeTruthy();
+    expect(controls[0]).not.toBe(controls[1]);
+    expect(screen.getAllByTestId("reasoning-full-text")).toHaveLength(2);
+    expect(screen.getAllByTestId("reasoning-full-text").map((region) => region.id)).toEqual(
+      controls,
+    );
+  });
+
+  it("keeps caller spacing on the wrapper in both states", () => {
+    render(<ReasoningRow text="some reasoning" streaming={false} className="mb-2" />);
+    const collapsedWrapper = screen.getByTestId("reasoning-toggle").parentElement;
+    expect(collapsedWrapper).toHaveClass("mb-2");
+    expect(screen.getByTestId("activity-step")).not.toHaveClass("mb-2");
+
+    fireEvent.click(screen.getByTestId("reasoning-toggle"));
+    const expandedWrapper = screen.getByTestId("reasoning-full-text").parentElement;
+    expect(expandedWrapper).toHaveClass("mb-2");
+    expect(screen.getByTestId("reasoning-full-text")).not.toHaveClass("mb-1");
+  });
+
+  it("composes the shared activity step row layout", () => {
+    render(<ReasoningRow text="some reasoning" streaming={false} />);
+    const step = screen.getByTestId("activity-step");
+    expect(step).toHaveClass("grid-cols-[1.125rem_minmax(0,1fr)]");
+    expect(screen.getByTestId("activity-line")).toHaveAttribute("title", "some reasoning");
+    // The chevron rides as a trailing sibling of the label, not inside the truncating span.
+    const line = screen.getByTestId("activity-line");
+    const chevron = line.querySelector("svg");
+    expect(chevron).toBeInTheDocument();
+    expect(line.contains(chevron)).toBe(true);
+    expect(chevron?.parentElement).not.toHaveClass("truncate");
+  });
 });

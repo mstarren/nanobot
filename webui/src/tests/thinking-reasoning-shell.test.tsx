@@ -9,12 +9,7 @@ function renderShell(expanded: boolean) {
       active={false}
       expanded={expanded}
       label="Thought"
-      viewportRef={() => undefined}
-      contentRef={() => undefined}
-      fadeTop={false}
-      fadeBottom={false}
       onToggle={vi.fn()}
-      onScroll={vi.fn()}
     >
       <button type="button">Hidden action</button>
     </ThinkingReasoningShell>,
@@ -35,12 +30,7 @@ describe("ThinkingReasoningShell", () => {
         active={false}
         expanded
         label="Thought"
-        viewportRef={() => undefined}
-        contentRef={() => undefined}
-        fadeTop={false}
-        fadeBottom={false}
         onToggle={vi.fn()}
-        onScroll={vi.fn()}
       >
         <button type="button">Hidden action</button>
       </ThinkingReasoningShell>,
