@@ -1158,9 +1158,27 @@ class GatewayHTTPHandler:
         return dict(getattr(request, _WEBUI_MUTATION_PAYLOAD_ATTR, {}) or {})
 
     def _handle_notebooks(self, request: WsRequest) -> Response:
-        """GET /api/notebooks — list all notebooks with their session keys."""
+        """GET /api/notebooks — list notebooks; mutation POST — create one.
+
+        ``notebook.create`` maps to this path (no id in the URL), so a
+        mutation payload on the request means "create", otherwise list.
+        """
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
+        payload = self._notebook_mutation_payload(request)
+        if payload:
+            try:
+                notebook = notebook_create(
+                    name=payload.get("name", ""),
+                    emoji=payload.get("emoji") or "",
+                    instructions=payload.get("instructions") or "",
+                )
+                return _http_json_response({"notebook": notebook})
+            except ValueError as e:
+                return _http_error(400, str(e))
+            except Exception as e:
+                self._log.exception("notebook create failed")
+                return _http_error(500, f"notebook store error: {e}")
         try:
             return _http_json_response({"notebooks": notebook_list()})
         except Exception as e:

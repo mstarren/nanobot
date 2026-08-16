@@ -111,6 +111,34 @@ def test_notebook_list_route() -> None:
     assert payload["notebooks"][0]["name"] == "Research"
 
 
+def test_notebook_create_route_via_mutation_payload(tmp_path: Path) -> None:
+    """notebook.create must actually create (regression: it used to no-op)."""
+    handler = _handler(None)
+    request = _payload_response(
+        MagicMock(),
+        {"name": "Research", "emoji": "🔬", "instructions": "v1"},
+    )
+    response = handler._handle_notebooks(request)
+    payload = _json(response)
+    assert "notebook" in payload
+    nb = payload["notebook"]
+    assert nb["name"] == "Research"
+    assert nb["emoji"] == "🔬"
+    assert nb["instructions"] == "v1"
+    assert store.get_notebook(nb["id"]) is not None
+
+    # A plain GET (no mutation payload) still lists.
+    listed = _json(handler._handle_notebooks(MagicMock()))
+    assert len(listed["notebooks"]) == 1
+    assert listed["notebooks"][0]["id"] == nb["id"]
+
+    # Missing name is a 400, not a silent no-op.
+    bad = handler._handle_notebooks(
+        _payload_response(MagicMock(), {"emoji": "🔬"})
+    )
+    assert bad.status_code == 400
+
+
 def test_notebook_create_and_update_route(tmp_path: Path) -> None:
     handler = _handler(None)
     nb = store.create_notebook(name="Research", instructions="v1")
