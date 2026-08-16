@@ -48,6 +48,11 @@
       "expiresInline": "Mã hết hạn {{expires}}.",
       "queueCount": "{{count}} đang chờ",
       "noMatch": "Không có yêu cầu đang chờ nào khớp với mã này."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

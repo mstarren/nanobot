@@ -48,6 +48,11 @@
       "expiresInline": "コードの有効期限: {{expires}}。",
       "queueCount": "{{count}} 件待機中",
       "noMatch": "このコードに一致する保留中のリクエストはありません。"
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

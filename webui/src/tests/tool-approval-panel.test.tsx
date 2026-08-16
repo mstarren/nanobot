@@ -81,4 +81,27 @@ describe("ToolApprovalPanel", () => {
     expect(screen.getByText(/^Request:/)).toBeInTheDocument();
     expect(screen.getByText(/abc123/)).toBeInTheDocument();
   });
+
+  it("labels yolo auto-approvals as Yolo in the pill's orange", () => {
+    renderPanel({ yolo: true });
+    expect(screen.getByText("Yolo")).toBeInTheDocument();
+    expect(screen.queryByText("Auto-approved")).not.toBeInTheDocument();
+    const badge = screen.getByText("Yolo").closest("span");
+    expect(badge).toHaveClass("text-orange-600");
+    expect(badge).toHaveClass("dark:text-orange-300");
+  });
+
+  it("bypasses the assessment workflow for yolo auto-approvals", () => {
+    renderPanel({
+      yolo: true,
+      reason: "YOLO mode is enabled — approved without review.",
+      triage_raw: "",
+    });
+    // Only the tool call and the response remain; no triage assessment.
+    expect(screen.queryByText("Assessment")).not.toBeInTheDocument();
+    expect(screen.queryByText("Smart triage response")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assessed safe")).not.toBeInTheDocument();
+    expect(screen.getByText("Tool call")).toBeInTheDocument();
+    expect(screen.getByText("Result")).toBeInTheDocument();
+  });
 });

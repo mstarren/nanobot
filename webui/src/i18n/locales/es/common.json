@@ -48,6 +48,11 @@
       "expiresInline": "El código caduca {{expires}}.",
       "queueCount": "{{count}} pendientes",
       "noMatch": "No hay ninguna solicitud pendiente que coincida con este código."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

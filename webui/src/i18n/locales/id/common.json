@@ -48,6 +48,11 @@
       "expiresInline": "Kode kedaluwarsa {{expires}}.",
       "queueCount": "{{count}} menunggu",
       "noMatch": "Tidak ada permintaan tertunda yang cocok dengan kode ini."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

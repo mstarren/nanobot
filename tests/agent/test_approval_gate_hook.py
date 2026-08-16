@@ -161,8 +161,12 @@ async def test_yolo_mode_auto_approves_gated_call() -> None:
     await hook.before_execute_tool(context(), call, None, {"command": "echo hi"})
     assert bus.messages == []
     assert get_approval_gate().pending_payload() == []
-    assert getattr(call, "approval_info", {}).get("status") == "auto_approved"
-    assert "YOLO" in getattr(call, "approval_info", {}).get("reason", "")
+    info = getattr(call, "approval_info", {})
+    assert info.get("status") == "auto_approved"
+    assert "YOLO" in info.get("reason", "")
+    # The yolo marker lets the WebUI render the "Yolo" badge and skip the
+    # assessment workflow for this record.
+    assert info.get("yolo") is True
 
 
 async def test_yolo_mode_never_bypasses_hardline_deny() -> None:

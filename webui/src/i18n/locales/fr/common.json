@@ -48,6 +48,11 @@
       "expiresInline": "Le code expire {{expires}}.",
       "queueCount": "{{count}} en attente",
       "noMatch": "Aucune demande en attente ne correspond à ce code."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

@@ -48,6 +48,11 @@
       "expiresInline": "O código expira {{expires}}.",
       "queueCount": "{{count}} pendentes",
       "noMatch": "Nenhuma solicitação pendente corresponde a este código."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

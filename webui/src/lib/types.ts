@@ -291,6 +291,8 @@ export interface ApprovalRecord {
   request_id?: string | null;
   expires_in_seconds?: number;
   decided_at_ms?: number;
+  /** True when the call was auto-approved by yolo mode (no triage review). */
+  yolo?: boolean;
 }
 
 export interface ToolProgressEvent {

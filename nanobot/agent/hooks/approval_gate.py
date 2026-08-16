@@ -44,6 +44,7 @@ def _attach_approval_info(
     triage_raw: str,
     request_id: str | None,
     expires_in_seconds: float | None = None,
+    yolo: bool = False,
 ) -> None:
     """Attach structured approval info to the tool call.
 
@@ -61,6 +62,8 @@ def _attach_approval_info(
     }
     if expires_in_seconds is not None:
         info["expires_in_seconds"] = expires_in_seconds
+    if yolo:
+        info["yolo"] = True
     try:
         tool_call.approval_info = info
     except Exception:  # noqa: BLE001 - metadata must never break the gate
@@ -119,6 +122,7 @@ class ApprovalGateHook(AgentHook):
                 reason="YOLO mode is enabled — approved without review.",
                 triage_raw="",
                 request_id=None,
+                yolo=True,
             )
             return
 

@@ -48,6 +48,11 @@
       "expiresInline": "코드 만료: {{expires}}.",
       "queueCount": "{{count}}개 대기 중",
       "noMatch": "이 코드와 일치하는 대기 중인 요청이 없습니다."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {

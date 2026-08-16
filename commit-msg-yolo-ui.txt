@@ -1,0 +1,21 @@
+feat(approval): yolo auto-approvals show a "Yolo" badge and skip the assessment UI
+
+Two WebUI refinements for yolo-mode auto-approvals (PR #6):
+
+1. In-line status reads "Yolo" in the pill's orange. The approval record
+   attached by the yolo path now carries an explicit `yolo: true` marker
+   (added in `_attach_approval_info`), so the ToolApprovalPanel can render
+   the status badge as "Yolo" with the composer pill's orange tone
+   (`bg-orange-500/10 text-orange-600 dark:text-orange-300`) instead of the
+   generic emerald "Auto-approved" tone. The "Assessed safe" verdict label
+   is hidden for yolo records — nothing was assessed.
+
+2. Assessment workflow bypassed. For yolo records the panel shows only the
+   tool call and its result: the Assessment (reason) block and the Smart
+   triage response block are skipped, since yolo mode approves without
+   triage.
+
+The `yolo` flag flows through the existing approval_info -> tool event
+payload path unchanged, so old records without the flag keep the current
+behavior. New i18n key `app.approval.status.yolo` added to all 10 locales
+with a defaultValue fallback.

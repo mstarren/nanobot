@@ -48,6 +48,11 @@
       "expiresInline": "配對碼將於 {{expires}} 到期。",
       "queueCount": "{{count}} 個待處理",
       "noMatch": "沒有待處理請求符合此配對碼。"
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {
