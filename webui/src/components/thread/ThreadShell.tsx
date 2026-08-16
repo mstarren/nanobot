@@ -44,6 +44,7 @@ import type {
   WorkspacesPayload,
 } from "@/lib/types";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-compat";
+import { latestSessionTodos } from "@/lib/todos";
 import { useClient } from "@/providers/ClientProvider";
 
 type MessageShape = Pick<UIMessage, "role" | "kind" | "content" | "isStreaming" | "turnId">;
@@ -806,6 +807,10 @@ export function ThreadShell({
   const displayMessages = useMemo(() => projectWebuiThreadMessages(messages), [messages]);
   const currentRunStartedAt = messagesReady ? runStartedAt : null;
   const currentGoalState = messagesReady ? goalState : undefined;
+  const currentTodos = useMemo(
+    () => (messagesReady ? latestSessionTodos(displayMessages) : null),
+    [messagesReady, displayMessages],
+  );
   const turnActive = messagesReady && (isStreaming || currentRunStartedAt !== null);
   const restoredViewportTurnId = useMemo(
     () => turnActive ? latestActiveTurnId(displayMessages) : null,
@@ -1459,6 +1464,7 @@ export function ThreadShell({
           onStop={stop}
           onTranscribeAudio={transcribeAudio}
           goalState={currentGoalState}
+          todos={currentTodos}
           workspaceScope={workspaceScope}
           workspaceControlsHidden={temporary}
           workspaceDefaultScope={workspaceDefaultScope}
@@ -1506,6 +1512,7 @@ export function ThreadShell({
           surfaceRef={composerSurfaceRef}
           onTranscribeAudio={transcribeAudio}
           goalState={currentGoalState}
+          todos={currentTodos}
           workspaceScope={workspaceScope}
           workspaceControlsHidden={temporary}
           workspaceDefaultScope={workspaceDefaultScope}

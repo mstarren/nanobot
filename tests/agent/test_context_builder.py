@@ -328,6 +328,14 @@ class TestBuildSystemPrompt:
         result = builder.build_system_prompt()
         assert "Be helpful and concise." in result
 
+    def test_includes_todo_guidance(self, tmp_path):
+        builder = _builder(tmp_path)
+        result = builder.build_system_prompt()
+        assert "# To-Do List Guidance" in result
+        assert "complex multi-step requests" in result
+        assert "`todo` tool" in result
+        assert "exactly ONE item `in_progress`" in result
+
     def test_includes_session_summary(self, tmp_path):
         builder = _builder(tmp_path)
         result = builder.build_system_prompt(session_summary="Previous chat about Python.")

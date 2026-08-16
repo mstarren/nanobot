@@ -56,6 +56,7 @@ export { isAgentActivityMember, isReasoningOnlyAssistant };
 interface ActivityCounts {
   reasoningSteps: number;
   toolCalls: number;
+  todoCount: number;
   cliCount: number;
   mcpCount: number;
   fileCount: number;
@@ -92,6 +93,7 @@ function countActivity(
 ): ActivityCounts {
   let reasoningSteps = 0;
   let toolCalls = 0;
+  let todoCount = 0;
   const cliCount = cliRuns.length;
   const mcpCount = mcpRuns.length;
   for (const m of messages) {
@@ -102,6 +104,10 @@ function countActivity(
     if (m.kind === "trace") {
       const lines = traceLines(m);
       for (const line of lines) {
+        if (isTodoToolLine(line)) {
+          todoCount += 1;
+          continue;
+        }
         if (!isCliRunTraceLine(line) && !isMcpRunTraceLine(line)) {
           toolCalls += 1;
         }
@@ -111,6 +117,7 @@ function countActivity(
   return {
     reasoningSteps,
     toolCalls,
+    todoCount,
     cliCount,
     mcpCount,
     fileCount: fileEdits.length,
@@ -166,6 +173,7 @@ export function AgentActivityCluster({
   const {
     reasoningSteps,
     toolCalls,
+    todoCount,
     cliCount,
     mcpCount,
     fileCount,
@@ -187,9 +195,9 @@ export function AgentActivityCluster({
     ? outerOpenLocal
     : isTurnStreaming || completionHoldOpen || (wasTurnStreaming && !isTurnStreaming);
 
-  const hasVisibleActivity = reasoningSteps > 0 || toolCalls > 0 || cliCount > 0 || mcpCount > 0 || fileCount > 0;
+  const hasVisibleActivity = reasoningSteps > 0 || toolCalls > 0 || todoCount > 0 || cliCount > 0 || mcpCount > 0 || fileCount > 0;
   const hasOnlyFileActivity = fileCount > 0 && activityMessages.every(messageHasOnlyFileActivity);
-  const hasNonReasoningActivity = toolCalls > 0 || cliCount > 0 || mcpCount > 0 || fileCount > 0;
+  const hasNonReasoningActivity = toolCalls > 0 || todoCount > 0 || cliCount > 0 || mcpCount > 0 || fileCount > 0;
   const durationMs = activityDurationMs(
     activityMessages,
     isTurnStreaming,
@@ -413,6 +421,13 @@ function traceLines(message: UIMessage): string[] {
   return message.content.trim() ? [message.content] : [];
 }
 
+/** True for trace lines describing a ``todo`` tool call. Todo calls are
+ *  hoisted out of the transcript into the task-list panel (Hermes parity), so
+ *  they render neither as generic tool rows nor as raw trace lines. */
+function isTodoToolLine(line: string): boolean {
+  return /^todo\(/.test(line.trim());
+}
+
 function ActivityMessageTimeline({
   messages,
   active,
@@ -536,7 +551,7 @@ function ActivityTraceTimeline({
   cliAppsByName: Map<string, CliAppInfo>;
   mcpPresetsByName: Map<string, McpPresetInfo>;
 }) {
-  const lines = traceLines(message);
+  const lines = traceLines(message).filter((line) => !isTodoToolLine(line));
   const cliRunsByLine = cliRunMapByTraceLine(message);
   const mcpRunsByLine = mcpRunMapByTraceLine(message);
   const webSearchRunsByLine = webSearchRunsByTraceLine(message.toolEvents ?? []);
