@@ -1605,7 +1605,12 @@ function Shell({
     async (notebookId: string) => {
       const current = view === "chat" ? activeKey : null;
       if (!current) return;
-      const summary = sessions.find((s) => s.chatId === current);
+      // activeKey is the server-side session key (e.g. "websocket:chat-1");
+      // match on key, not chatId, and fall back to temporary sessions.
+      const summary =
+        sessions.find((s) => s.key === current) ??
+        temporarySessions[current] ??
+        null;
       if (!summary) return;
       try {
         await addSessionToNotebook(client, notebookId, summary.key);
@@ -1614,7 +1619,7 @@ function Shell({
         // Ignore failure; the next refresh reconciles.
       }
     },
-    [client, view, activeKey, sessions, refreshNotebooks],
+    [client, view, activeKey, sessions, temporarySessions, refreshNotebooks],
   );
 
   useEffect(() => {
