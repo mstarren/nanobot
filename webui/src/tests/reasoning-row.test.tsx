@@ -47,4 +47,41 @@ describe("ReasoningRow", () => {
     // The fallback label renders inside the header (compact preview path).
     expect(screen.getByTestId("activity-step")).toHaveTextContent("Thinking");
   });
+
+  it("links the disclosure button to the full-text region", () => {
+    render(<ReasoningRow text="some reasoning" streaming={false} />);
+    const toggle = screen.getByTestId("reasoning-toggle");
+    expect(toggle).toHaveAttribute("aria-controls", "reasoning-full-text");
+
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("reasoning-full-text")).toHaveAttribute(
+      "id",
+      "reasoning-full-text",
+    );
+  });
+
+  it("keeps caller spacing on the wrapper in both states", () => {
+    render(<ReasoningRow text="some reasoning" streaming={false} className="mb-2" />);
+    const collapsedWrapper = screen.getByTestId("reasoning-toggle").parentElement;
+    expect(collapsedWrapper).toHaveClass("mb-2");
+    expect(screen.getByTestId("activity-step")).not.toHaveClass("mb-2");
+
+    fireEvent.click(screen.getByTestId("reasoning-toggle"));
+    const expandedWrapper = screen.getByTestId("reasoning-full-text").parentElement;
+    expect(expandedWrapper).toHaveClass("mb-2");
+    expect(screen.getByTestId("reasoning-full-text")).not.toHaveClass("mb-1");
+  });
+
+  it("composes the shared activity step row layout", () => {
+    render(<ReasoningRow text="some reasoning" streaming={false} />);
+    const step = screen.getByTestId("activity-step");
+    expect(step).toHaveClass("grid-cols-[1.125rem_minmax(0,1fr)]");
+    expect(screen.getByTestId("activity-line")).toHaveAttribute("title", "some reasoning");
+    // The chevron rides as a trailing sibling of the label, not inside the truncating span.
+    const line = screen.getByTestId("activity-line");
+    const chevron = line.querySelector("svg");
+    expect(chevron).toBeInTheDocument();
+    expect(line.contains(chevron)).toBe(true);
+    expect(chevron?.parentElement).not.toHaveClass("truncate");
+  });
 });

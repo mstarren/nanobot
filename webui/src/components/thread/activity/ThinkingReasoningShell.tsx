@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -8,13 +8,8 @@ interface ThinkingReasoningShellProps {
   expanded: boolean;
   label: string;
   children: ReactNode;
-  viewportRef: Ref<HTMLDivElement>;
-  contentRef: Ref<HTMLDivElement>;
-  fadeTop: boolean;
-  fadeBottom: boolean;
   hasDetails?: boolean;
   onToggle: () => void;
-  onScroll: () => void;
 }
 
 export function ThinkingReasoningShell({
@@ -22,13 +17,8 @@ export function ThinkingReasoningShell({
   expanded,
   label,
   children,
-  viewportRef,
-  contentRef,
-  fadeTop,
-  fadeBottom,
   hasDetails = true,
   onToggle,
-  onScroll,
 }: ThinkingReasoningShellProps) {
   return (
     <div
@@ -99,33 +89,15 @@ export function ThinkingReasoningShell({
               : "pointer-events-none grid-rows-[0fr] opacity-0",
           )}
         >
-          <div className="relative min-h-0 overflow-hidden">
+          <div className="min-h-0 overflow-hidden">
             <div
-              ref={viewportRef}
-              data-testid={expanded ? "agent-activity-scroll" : undefined}
-              data-fade-top={fadeTop}
-              data-fade-bottom={fadeBottom}
-              onScroll={onScroll}
+              data-testid={expanded ? "agent-activity-content" : undefined}
               className="mt-1.5"
             >
-              <div ref={contentRef} className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-0.5">
                 {children}
               </div>
             </div>
-            {fadeTop ? (
-              <span
-                data-testid="activity-scroll-fade-top"
-                className="pointer-events-none absolute inset-x-0 top-1.5 z-10 h-3.5 bg-gradient-to-b from-background to-transparent"
-                aria-hidden
-              />
-            ) : null}
-            {fadeBottom ? (
-              <span
-                data-testid="activity-scroll-fade-bottom"
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-3.5 bg-gradient-to-t from-background to-transparent"
-                aria-hidden
-              />
-            ) : null}
           </div>
         </div>
       ) : null}

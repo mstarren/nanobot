@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, CircleDashed } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { StreamingLabelSheen } from "@/components/MessageBubble";
 import { cn } from "@/lib/utils";
 
+import { ActivityStep } from "./ActivityStep";
 import { compactReasoningPreview } from "./reasoning-preview";
 
 export function ReasoningRow({
@@ -25,68 +25,48 @@ export function ReasoningRow({
   const canExpand = text.trim().length > 0;
 
   const header = (
-    <div
-      data-testid="activity-step"
-      data-reasoning-row=""
-      className={cn(
-        "relative grid min-w-0 grid-cols-[1.125rem_minmax(0,1fr)] gap-2 py-0.5 text-[13px] leading-5",
-        className,
-      )}
-    >
-      <span
-        className="flex h-5 w-[1.125rem] shrink-0 items-start justify-center pt-[3px]"
-        aria-hidden
-      >
-        <ReasoningMarker streaming={streaming} />
-      </span>
-      <div className="min-w-0 overflow-hidden">
-        <div
-          data-testid="activity-line"
-          title={preview}
-          className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap"
-        >
-          <StreamingLabelSheen
-            active={streaming}
-            className="min-w-0 flex-1 italic text-muted-foreground/78"
-          >
-            {preview}
-          </StreamingLabelSheen>
-          {canExpand ? (
-            <ChevronDown
-              aria-hidden
-              className={cn(
-                "h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform [transition-duration:200ms] ease-out",
-                "motion-reduce:transition-none",
-                expanded && "rotate-180",
-              )}
-              strokeWidth={1.8}
-            />
-          ) : null}
-        </div>
-      </div>
-    </div>
+    <ActivityStep
+      active={streaming}
+      title={preview}
+      labelClassName="italic text-muted-foreground/78"
+      marker={<ReasoningMarker streaming={streaming} />}
+      label={preview}
+      trailing={canExpand ? (
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform [transition-duration:200ms] ease-out",
+            "motion-reduce:transition-none",
+            expanded && "rotate-180",
+          )}
+          strokeWidth={1.8}
+        />
+      ) : undefined}
+    />
   );
 
-  if (!canExpand) {
-    return header;
-  }
-
   return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        data-testid="reasoning-toggle"
-        onClick={() => setExpanded((value) => !value)}
-        aria-expanded={expanded}
-        aria-label={preview}
-        className="block w-full text-left"
-      >
-        {header}
-      </button>
+    <div className={cn("min-w-0", className)}>
+      {canExpand ? (
+        <button
+          type="button"
+          data-testid="reasoning-toggle"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-controls="reasoning-full-text"
+          aria-label={preview}
+          className="block w-full text-left"
+        >
+          {header}
+        </button>
+      ) : (
+        header
+      )}
       {expanded ? (
         <div
+          id="reasoning-full-text"
           data-testid="reasoning-full-text"
-          className="mb-1 ml-[1.125rem] border-l-2 border-muted/45 pl-3 pr-1"
+          className="ml-[1.125rem] border-l-2 border-muted/45 pl-3 pr-1"
         >
           <pre className="whitespace-pre-wrap break-words font-sans text-[12.5px] leading-5 text-muted-foreground/85">
             {text}
