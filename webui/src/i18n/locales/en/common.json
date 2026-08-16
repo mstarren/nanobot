@@ -1440,7 +1440,10 @@
     "failed": "Could not preview this file.",
     "routeMissing": "File preview needs the latest gateway. Restart nanobot gateway and try again.",
     "resize": "Resize file preview",
-    "truncated": "Preview is truncated because this file is large."
+    "truncated": "Preview is truncated because this file is large.",
+    "rendered": "Rendered",
+    "source": "Source",
+    "viewToggle": "Preview view"
   },
   "code": {
     "fallbackLanguage": "code",

@@ -1426,7 +1426,10 @@
     "failed": "Tidak dapat mempratinjau file ini.",
     "routeMissing": "Pratinjau file memerlukan gateway terbaru. Mulai ulang nanobot gateway lalu coba lagi.",
     "resize": "Ubah ukuran pratinjau file",
-    "truncated": "Pratinjau dipotong karena file ini besar."
+    "truncated": "Pratinjau dipotong karena file ini besar.",
+    "rendered": "Tampilan",
+    "source": "Sumber",
+    "viewToggle": "Tampilan pratinjau"
   },
   "code": {
     "fallbackLanguage": "kode",

@@ -1427,7 +1427,10 @@
     "failed": "No se pudo previsualizar este archivo.",
     "routeMissing": "La vista previa necesita el gateway más reciente. Reinicia nanobot gateway e inténtalo de nuevo.",
     "resize": "Cambiar el tamaño de la vista previa",
-    "truncated": "La vista previa está truncada porque el archivo es grande."
+    "truncated": "La vista previa está truncada porque el archivo es grande.",
+    "rendered": "Renderizado",
+    "source": "Código fuente",
+    "viewToggle": "Vista previa"
   },
   "code": {
     "fallbackLanguage": "código",
