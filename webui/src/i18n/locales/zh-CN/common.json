@@ -1432,6 +1432,10 @@
     "next": "下一张",
     "close": "关闭预览"
   },
+  "markdown": {
+    "mermaidFailed": "无法渲染此图表。",
+    "mermaidAria": "Mermaid 图表"
+  },
   "filePreview": {
     "aria": "文件预览",
     "breadcrumb": "文件路径",

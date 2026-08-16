@@ -1418,6 +1418,10 @@
     "next": "Image suivante",
     "close": "Fermer l’aperçu"
   },
+  "markdown": {
+    "mermaidFailed": "Impossible de rendre ce diagramme.",
+    "mermaidAria": "Diagramme Mermaid"
+  },
   "filePreview": {
     "aria": "Aperçu du fichier",
     "breadcrumb": "Chemin du fichier",

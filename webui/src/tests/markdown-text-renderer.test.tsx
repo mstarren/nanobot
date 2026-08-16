@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { FilePreviewAvailabilityProvider } from "@/components/FilePreviewAvailabilityContext";
 import MarkdownTextRenderer from "@/components/MarkdownTextRenderer";
 
+vi.mock("@/components/MermaidDiagram", () => ({
+  MermaidDiagram: ({ code }: { code: string }) => (
+    <div data-testid="mock-mermaid-diagram">{code}</div>
+  ),
+}));
+
 describe("MarkdownTextRenderer", () => {
   it("renders clickable markdown links in blue", () => {
     render(<MarkdownTextRenderer>[local server](http://127.0.0.1:7891/)</MarkdownTextRenderer>);
@@ -677,5 +683,27 @@ describe("MarkdownTextRenderer", () => {
     );
 
     expect(container.querySelector(".katex")).toBeInTheDocument();
+  });
+
+  it("renders mermaid fenced blocks through MermaidDiagram", () => {
+    render(
+      <MarkdownTextRenderer>
+        {"```mermaid\nflowchart TD\nA-->B\n```"}
+      </MarkdownTextRenderer>,
+    );
+
+    const diagram = screen.getByTestId("mock-mermaid-diagram");
+    expect(diagram).toHaveTextContent("flowchart TD");
+    expect(diagram).toHaveTextContent("A-->B");
+  });
+
+  it("keeps non-mermaid fenced blocks in code blocks", () => {
+    render(
+      <MarkdownTextRenderer>
+        {"```python\nprint('hi')\n```"}
+      </MarkdownTextRenderer>,
+    );
+
+    expect(screen.queryByTestId("mock-mermaid-diagram")).not.toBeInTheDocument();
   });
 });

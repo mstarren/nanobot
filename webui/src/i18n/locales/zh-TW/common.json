@@ -1418,6 +1418,10 @@
     "next": "下一張",
     "close": "關閉預覽"
   },
+  "markdown": {
+    "mermaidFailed": "無法渲染此圖表。",
+    "mermaidAria": "Mermaid 圖表"
+  },
   "filePreview": {
     "aria": "檔案預覽",
     "breadcrumb": "檔案路徑",

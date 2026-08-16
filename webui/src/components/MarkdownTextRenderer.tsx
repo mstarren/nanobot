@@ -20,6 +20,7 @@ import {
   INLINE_TOKEN_HIGHLIGHT_COLOR,
   InlineTokenHighlight,
 } from "@/components/InlineTokenHighlight";
+import { MermaidDiagram } from "@/components/MermaidDiagram";
 import {
   useFilePreviewAvailabilityResolver,
   type FilePreviewAvailabilityResolver,
@@ -581,6 +582,9 @@ export default function MarkdownTextRenderer({
           return <>{markdownChildren}</>;
         }
         const fence = codeFenceFromPreChild(lone);
+        if (fence?.language === "mermaid") {
+          return <MermaidDiagram code={fence.code} />;
+        }
         if (fence) {
           return (
             <CodeBlock
