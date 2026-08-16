@@ -709,8 +709,10 @@ export interface SettingsPayload {
     updated_at?: string | null;
   };
   approval?: {
-    /** Yolo mode: gated tool calls are auto-approved without review. */
+    /** Default yolo mode for sessions without an explicit override. */
     yolo_mode: boolean;
+    /** Per-session yolo overrides keyed by session key. */
+    yolo_sessions: Record<string, boolean>;
   };
   advanced: {
     restrict_to_workspace: boolean;

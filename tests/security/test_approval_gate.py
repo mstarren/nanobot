@@ -109,6 +109,21 @@ def test_yolo_mode_defaults_off_and_toggles() -> None:
     assert gate.yolo_mode is False
 
 
+def test_yolo_mode_is_session_scoped() -> None:
+    gate = ApprovalGate(gate_tools=["exec"])
+    assert gate.yolo_mode_for("websocket:chat-1") is False
+    gate.set_yolo_mode(True, session_key="websocket:chat-1")
+    assert gate.yolo_mode_for("websocket:chat-1") is True
+    # Other sessions keep the default; the global default is untouched.
+    assert gate.yolo_mode_for("websocket:chat-2") is False
+    assert gate.yolo_mode is False
+    assert gate.yolo_sessions_payload() == {"websocket:chat-1": True}
+    # Clearing the override falls back to the default again.
+    gate.set_yolo_mode(False, session_key="websocket:chat-1")
+    assert gate.yolo_mode_for("websocket:chat-1") is False
+    assert gate.yolo_sessions_payload() == {"websocket:chat-1": False}
+
+
 def test_reasoning_detail_uses_last_paragraph() -> None:
     """The CoT fallback must surface the conclusion, not the opening
     task-restatement paragraph."""

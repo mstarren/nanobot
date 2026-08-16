@@ -743,20 +743,22 @@ describe("webui API helpers", () => {
     );
   });
 
-  it("flips yolo mode through the approval mutation", async () => {
+  it("flips yolo mode for one session through the approval mutation", async () => {
     requestMutation.mockResolvedValueOnce({
       ok: true,
       yolo_mode: true,
+      yolo_sessions: { "websocket:chat-1": true },
       requests: [],
     });
-    const payload = await setYoloMode(mutationTransport, true);
+    const payload = await setYoloMode(mutationTransport, "websocket:chat-1", true);
 
     expect(requestMutation).toHaveBeenCalledWith(
       "approval.yolo",
-      { enabled: true },
+      { enabled: true, session: "websocket:chat-1" },
       20_000,
     );
     expect(payload.yolo_mode).toBe(true);
+    expect(payload.yolo_sessions).toEqual({ "websocket:chat-1": true });
   });
 
   it("serializes image generation settings updates", async () => {

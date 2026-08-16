@@ -104,7 +104,7 @@ class ApprovalGateHook(AgentHook):
         if not gate.needs_approval(tool_call.name, arguments):
             return
 
-        if gate.yolo_mode and not _looks_hardline(tool_call.name, arguments):
+        if gate.yolo_mode_for(self._session_key) and not _looks_hardline(tool_call.name, arguments):
             # Yolo mode: skip triage and the human prompt, approve outright.
             # The hardline DENY floor still applies and is always reviewed.
             logger.info(

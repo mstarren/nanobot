@@ -70,9 +70,13 @@ the right of the workspace access mode. While ON, gated tool calls are
 still attached to the tool event (status `auto_approved`, reason "YOLO mode
 is enabled — approved without review.").
 
-- Toggled live from the WebUI via `POST /api/approval/yolo` (`{enabled}`); no
-  restart required. State is reported in the settings payload
-  (`approval.yolo_mode`) and resets to off when the gateway restarts.
+- Toggled live from the WebUI via `POST /api/approval/yolo` (`{enabled,
+  session}`); no restart required. The toggle is **session-scoped**: pass the
+  session key (e.g. `websocket:<chat_id>`) to flip yolo mode for that session
+  only; omit it to change the default for sessions without an explicit
+  override. State is reported in the settings payload (`approval.yolo_mode`
+  default + `approval.yolo_sessions` overrides) and resets when the gateway
+  restarts.
 - The hardline DENY floor still applies: hardline commands are always
   reviewed, never auto-approved by yolo mode.
 - Yolo mode does not change triage behavior for any call that is not gated

@@ -110,8 +110,10 @@ def system_settings_payload(
 
         gate = get_approval_gate()
         yolo_mode = bool(gate.yolo_mode) if gate is not None else False
+        yolo_sessions = gate.yolo_sessions_payload() if gate is not None else {}
     except Exception:  # noqa: BLE001 - settings must load even if the gate is unavailable
         yolo_mode = False
+        yolo_sessions = {}
     return {
         "runtime": {
             "config_path": str(config_path.expanduser()),
@@ -131,6 +133,7 @@ def system_settings_payload(
         "usage": token_usage_payload(timezone_name=defaults.timezone),
         "approval": {
             "yolo_mode": yolo_mode,
+            "yolo_sessions": yolo_sessions,
         },
         "advanced": {
             "restrict_to_workspace": config.tools.restrict_to_workspace,
@@ -921,7 +924,12 @@ class SystemSettingsHandler:
         )
 
     def _approval_yolo(self, request: SettingsRequest) -> SettingsRouteResult:
-        """Toggle yolo mode (auto-approve gated calls) at runtime."""
+        """Toggle yolo mode (auto-approve gated calls) at runtime.
+
+        Scoped to one session when ``session`` is given (WebUI pill); without
+        it the toggle changes the default for sessions that have no explicit
+        override. The hardline DENY floor always applies.
+        """
         from nanobot.security.approval_gate import get_approval_gate
 
         gate = get_approval_gate()
@@ -932,11 +940,15 @@ class SystemSettingsHandler:
             "true",
             "yes",
         }
-        gate.set_yolo_mode(enabled)
+        session = (query_first(request.query, "session") or "").strip()
+        if len(session) > 256:
+            return SettingsRouteResult.failure(400, "session key too long")
+        gate.set_yolo_mode(enabled, session_key=session or None)
         return SettingsRouteResult.success(
             {
                 "ok": True,
                 "yolo_mode": gate.yolo_mode,
+                "yolo_sessions": gate.yolo_sessions_payload(),
                 "requests": gate.pending_payload(),
             }
         )

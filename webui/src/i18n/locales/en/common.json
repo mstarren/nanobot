@@ -1354,6 +1354,7 @@
       },
       "yolo": {
         "label": "YOLO",
+        "labelOff": "HITL",
         "aria": "Yolo mode: {{state}}",
         "on": "Yolo mode: ON — gated tool calls are approved without review",
         "off": "Yolo mode: OFF — risky tool calls are reviewed before running"

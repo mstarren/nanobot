@@ -1354,6 +1354,7 @@
       },
       "yolo": {
         "label": "YOLO",
+        "labelOff": "HITL",
         "aria": "YOLO 모드: {{state}}",
         "on": "YOLO 모드: 켜짐 — 심사 대상 도구 호출이 검토 없이 승인됩니다",
         "off": "YOLO 모드: 꺼짐 — 위험한 도구 호출은 실행 전에 검토됩니다"

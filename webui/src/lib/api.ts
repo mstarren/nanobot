@@ -604,15 +604,20 @@ export async function fetchApprovalRequests(
 export interface YoloModePayload {
   ok: boolean;
   yolo_mode: boolean;
+  yolo_sessions: Record<string, boolean>;
   requests: ApprovalRequestInfo[];
 }
 
-/** Flip the approval gate's yolo mode (auto-approve gated calls). */
+/** Flip the approval gate's yolo mode for one session (auto-approve gated calls). */
 export async function setYoloMode(
   transport: WebUIMutationTransport,
+  sessionKey: string,
   enabled: boolean,
 ): Promise<YoloModePayload> {
-  return mutation<YoloModePayload>(transport, "approval.yolo", { enabled });
+  return mutation<YoloModePayload>(transport, "approval.yolo", {
+    enabled,
+    session: sessionKey,
+  });
 }
 
 export async function startChannelConnect(

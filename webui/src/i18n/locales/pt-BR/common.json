@@ -1354,6 +1354,7 @@
       },
       "yolo": {
         "label": "YOLO",
+        "labelOff": "HITL",
         "aria": "Modo YOLO: {{state}}",
         "on": "Modo YOLO: ATIVADO — chamadas de ferramentas são aprovadas sem revisão",
         "off": "Modo YOLO: DESATIVADO — chamadas arriscadas são revisadas antes de executar"

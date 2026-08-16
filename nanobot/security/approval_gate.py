@@ -218,26 +218,48 @@ class ApprovalGate:
         self._smart_policy = smart_policy
         self._triage_model = triage_model
         self._yolo_mode = bool(yolo_mode)
+        self._yolo_sessions: dict[str, bool] = {}
         self._pending: dict[str, ApprovalRequest] = {}
 
     # -- runtime toggles ----------------------------------------------------
 
     @property
     def yolo_mode(self) -> bool:
-        """Whether gated tool calls are auto-approved without review."""
+        """Default yolo mode for sessions without an explicit override."""
         return self._yolo_mode
 
-    def set_yolo_mode(self, enabled: bool) -> None:
+    def yolo_mode_for(self, session_key: str) -> bool:
+        """Yolo state for one session: explicit override, else the default."""
+        if session_key:
+            return self._yolo_sessions.get(session_key, self._yolo_mode)
+        return self._yolo_mode
+
+    def set_yolo_mode(self, enabled: bool, session_key: str | None = None) -> None:
         """Flip yolo mode at runtime (WebUI pill; no restart needed).
 
+        With a session key the toggle is scoped to that session only; without
+        one it changes the default for sessions that have no explicit override.
         The hardline DENY floor still applies: ``_looks_hardline`` calls are
         always reviewed, never auto-approved by yolo mode.
         """
-        self._yolo_mode = bool(enabled)
-        logger.info(
-            "Approval gate: yolo mode {}",
-            "enabled (auto-approving gated calls)" if self._yolo_mode else "disabled",
-        )
+        enabled = bool(enabled)
+        if session_key:
+            self._yolo_sessions[session_key] = enabled
+            logger.info(
+                "Approval gate: yolo mode {} for session={}",
+                "enabled (auto-approving gated calls)" if enabled else "disabled",
+                session_key,
+            )
+        else:
+            self._yolo_mode = enabled
+            logger.info(
+                "Approval gate: yolo mode {} (default)",
+                "enabled (auto-approving gated calls)" if enabled else "disabled",
+            )
+
+    def yolo_sessions_payload(self) -> dict[str, bool]:
+        """Per-session yolo overrides for the settings payload."""
+        return dict(self._yolo_sessions)
 
     # -- policy -----------------------------------------------------------
 

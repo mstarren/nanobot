@@ -188,6 +188,34 @@ async def test_yolo_mode_never_bypasses_hardline_deny() -> None:
         await task
 
 
+async def test_yolo_mode_is_scoped_to_the_hook_session() -> None:
+    """Yolo on for one session must not auto-approve another session's calls."""
+    bus = FakeBus()
+    hook = make_hook(bus, gate_tools=["exec"])
+    gate = get_approval_gate()
+    assert gate is not None
+    # Enable yolo only for this hook's session key.
+    gate.set_yolo_mode(True, session_key="ws:chat-1")
+
+    call = tool_call()
+    await hook.before_execute_tool(context(), call, None, {"command": "echo hi"})
+    assert bus.messages == []
+    assert getattr(call, "approval_info", {}).get("status") == "auto_approved"
+
+    # A different session key on the same gate still goes through triage.
+    other = ApprovalGateHook(
+        bus=bus,
+        channel="websocket",
+        chat_id="chat-2",
+        session_key="ws:chat-2",
+        runtime_getter=lambda session_key: make_runtime("APPROVE"),
+    )
+    call2 = tool_call()
+    await other.before_execute_tool(context(), call2, None, {"command": "echo hi"})
+    assert getattr(call2, "approval_info", {}).get("status") == "auto_approved"
+    assert "smart" in getattr(call2, "approval_info", {}).get("reason", "").lower()
+
+
 async def test_hook_is_noop_when_gate_not_configured() -> None:
     configure_approval_gate(gate_tools=["exec"])  # ensure configured
     from nanobot.agent.hook import AgentTurnHookContext

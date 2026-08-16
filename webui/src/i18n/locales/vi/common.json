@@ -1354,6 +1354,7 @@
       },
       "yolo": {
         "label": "YOLO",
+        "labelOff": "HITL",
         "aria": "Chế độ YOLO: {{state}}",
         "on": "Chế độ YOLO: BẬT — các lời gọi công cụ được duyệt tự động không cần xem xét",
         "off": "Chế độ YOLO: TẮT — các lời gọi rủi ro được xem xét trước khi chạy"

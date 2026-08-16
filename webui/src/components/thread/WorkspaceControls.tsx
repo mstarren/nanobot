@@ -381,7 +381,10 @@ export function YoloModePill({
   onChange?: (enabled: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const label = t("thread.composer.yolo.label", { defaultValue: "YOLO" });
+  const label = t(
+    enabled ? "thread.composer.yolo.label" : "thread.composer.yolo.labelOff",
+    { defaultValue: enabled ? "YOLO" : "HITL" },
+  );
   const stateLabel = t(
     enabled ? "thread.composer.yolo.on" : "thread.composer.yolo.off",
     {
@@ -405,7 +408,7 @@ export function YoloModePill({
       disabled={disabled || !onChange}
       onClick={() => onChange?.(!enabled)}
       className={cn(
-        "thread-composer-access touch-target min-w-0 whitespace-nowrap rounded-control border border-transparent font-semibold shadow-none",
+        "thread-composer-access touch-target inline-flex min-w-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-control border border-transparent font-semibold shadow-none",
         isHero ? "h-8 px-2.5 text-[12px]" : "h-9 px-3 text-[12.5px]",
         enabled
           ? "bg-transparent text-orange-600 hover:bg-orange-500/8 dark:text-orange-300 dark:hover:bg-orange-400/10"

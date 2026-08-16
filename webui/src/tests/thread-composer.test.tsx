@@ -1060,7 +1060,8 @@ describe("ThreadComposer", () => {
 
     const toggle = screen.getByTestId("yolo-mode-toggle");
     expect(toggle).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByText("YOLO")).toBeInTheDocument();
+    // Off state reads as HITL (human-in-the-loop); on state reads as YOLO.
+    expect(screen.getByText("HITL")).toBeInTheDocument();
 
     fireEvent.click(toggle);
     expect(onYoloModeChange).toHaveBeenCalledWith(true);
