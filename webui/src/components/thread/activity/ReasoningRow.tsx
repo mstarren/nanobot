@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, CircleDashed } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -23,6 +23,7 @@ export function ReasoningRow({
   const preview = compactReasoningPreview(text) || fallback;
   const [expanded, setExpanded] = useState(false);
   const canExpand = text.trim().length > 0;
+  const fullTextId = useId();
 
   const header = (
     <ActivityStep
@@ -53,7 +54,7 @@ export function ReasoningRow({
           data-testid="reasoning-toggle"
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
-          aria-controls="reasoning-full-text"
+          aria-controls={fullTextId}
           aria-label={preview}
           className="block w-full text-left"
         >
@@ -64,7 +65,7 @@ export function ReasoningRow({
       )}
       {expanded ? (
         <div
-          id="reasoning-full-text"
+          id={fullTextId}
           data-testid="reasoning-full-text"
           className="ml-[1.125rem] border-l-2 border-muted/45 pl-3 pr-1"
         >

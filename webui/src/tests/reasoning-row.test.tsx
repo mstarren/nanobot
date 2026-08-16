@@ -48,15 +48,36 @@ describe("ReasoningRow", () => {
     expect(screen.getByTestId("activity-step")).toHaveTextContent("Thinking");
   });
 
-  it("links the disclosure button to the full-text region", () => {
+  it("links the disclosure button to its full-text region", () => {
     render(<ReasoningRow text="some reasoning" streaming={false} />);
     const toggle = screen.getByTestId("reasoning-toggle");
-    expect(toggle).toHaveAttribute("aria-controls", "reasoning-full-text");
-
     fireEvent.click(toggle);
-    expect(screen.getByTestId("reasoning-full-text")).toHaveAttribute(
-      "id",
-      "reasoning-full-text",
+
+    const full = screen.getByTestId("reasoning-full-text");
+    const controls = toggle.getAttribute("aria-controls");
+    expect(controls).toBeTruthy();
+    expect(full).toHaveAttribute("id", controls);
+  });
+
+  it("gives multiple reasoning rows unique disclosure targets", () => {
+    render(
+      <>
+        <ReasoningRow text="first reasoning" streaming={false} />
+        <ReasoningRow text="second reasoning" streaming={false} />
+      </>,
+    );
+    const toggles = screen.getAllByTestId("reasoning-toggle");
+
+    fireEvent.click(toggles[0]);
+    fireEvent.click(toggles[1]);
+
+    const controls = toggles.map((toggle) => toggle.getAttribute("aria-controls"));
+    expect(controls[0]).toBeTruthy();
+    expect(controls[1]).toBeTruthy();
+    expect(controls[0]).not.toBe(controls[1]);
+    expect(screen.getAllByTestId("reasoning-full-text")).toHaveLength(2);
+    expect(screen.getAllByTestId("reasoning-full-text").map((region) => region.id)).toEqual(
+      controls,
     );
   });
 
