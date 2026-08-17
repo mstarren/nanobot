@@ -57,42 +57,96 @@ TRIAGE_DENY = "deny"
 TRIAGE_ESCALATE = "escalate"
 # Hardline floor: these commands always require an explicit human decision.
 # Patterns deliberately match a command segment, not the whole shell script;
-# the caller splits newlines and common shell control operators first.
+# the caller strips comments and leading wrappers, then splits newlines and
+# common shell control operators before matching.
 _HARDLINE_PATTERNS = (
-    re.compile(r"^\s*rm\s+(?:-[a-z]*[rRfF][a-z]*\s+)+/(?:\*)?(?:\s|$)", re.I),
+    re.compile(
+        r"^\s*rm\s+(?:(?:-[a-z]*[rRfF][a-z]*|--no-preserve-root)\s+)+/(?:\*)?(?:\s|$)",
+        re.I,
+    ),
     re.compile(r"^\s*mkfs\b", re.I),
     re.compile(r"^\s*dd\s+.*\bof=/dev/", re.I),
-    re.compile(r"^\s*:\(\)\s*\{\s*:\|:&\s*\}", re.I),
+    re.compile(r"^\s*:\(\)\s*\{\s*:", re.I),
     re.compile(r"^\s*(?:shutdown|poweroff|reboot)\b", re.I),
 )
-_SUDO_PREFIX_RE = re.compile(r"^\s*sudo(?:\s+-[^\s]+)*\s+", re.I)
-_SHELL_SEGMENT_RE = re.compile(r"\r?\n|&&|\|\||;")
+_SUDO_PREFIX_RE = re.compile(
+    r"^\s*sudo(?:\s+--|\s+-[^\s]+(?:\s+[^\s]+)?)*\s+", re.I
+)
+_ENV_PREFIX_RE = re.compile(
+    r"^\s*(?:env\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\S+)\s+)+"
+)
+_SHELL_C_RE = re.compile(
+    r"^\s*(?:bash|sh|zsh|dash|ksh|fish)(?:\s+-[a-zA-Z]+)*\s+-c\s+"
+    r"(?:'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))",
+    re.I | re.S,
+)
+_SHELL_SEGMENT_RE = re.compile(r"\r?\n|&&|\|\||;|\|")
 
 _SHELL_TOOLS = {"exec", "run_command", "shell", "cmd", "execute"}
 
 _SECRET_KEY_RE = re.compile(r"(token|secret|password|api[_-]?key|authorization|credential)", re.I)
 
-_COMMENT_STRIP_RE = re.compile(r"\s+#.*$")
-
 
 def _strip_shell_comments(command: str) -> str:
-    """Strip trailing shell comments to remove the easiest injection vector."""
-    lines: list[str] = []
-    for line in command.splitlines():
-        lines.append(_COMMENT_STRIP_RE.sub("", line.rstrip()))
-    return "\n".join(lines)
+    """Strip shell comments while respecting single/double-quoted strings.
+
+    A '#' starts a comment only when it is not inside quotes and sits at a
+    word boundary (line start or preceded by whitespace), matching shell
+    lexing closely enough that `echo "# not a comment"; rm -rf /` keeps the
+    quoted text and still exposes the command.
+    """
+    out: list[str] = []
+    in_single = False
+    in_double = False
+    i = 0
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif (
+            char == "#"
+            and not in_single
+            and not in_double
+            and (i == 0 or command[i - 1].isspace())
+        ):
+            while i < n and command[i] != "\n":
+                i += 1
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
+def _unwrap_shell_wrappers(command: str) -> str:
+    """Strip leading sudo/env wrappers and shell `-c` indirection so the
+    anchored hardline patterns see the real command."""
+    for _ in range(5):
+        stripped = _SUDO_PREFIX_RE.sub("", command, count=1)
+        stripped = _ENV_PREFIX_RE.sub("", stripped, count=1)
+        match = _SHELL_C_RE.match(stripped)
+        if match:
+            stripped = next(group for group in match.groups() if group is not None)
+        if stripped == command:
+            return command
+        command = stripped
+    return command
 
 
 def _looks_hardline(tool_name: str, arguments: Any) -> bool:
     """Return True for catastrophic commands that no approval may allow."""
     if tool_name not in _SHELL_TOOLS:
         return False
-    command = _arguments_command(tool_name, arguments) or ""
-    for segment in _SHELL_SEGMENT_RE.split(_strip_shell_comments(command)):
-        segment = _SUDO_PREFIX_RE.sub("", segment, count=1)
-        if any(pattern.search(segment) for pattern in _HARDLINE_PATTERNS):
-            return True
-    return False
+    command = _strip_shell_comments(_arguments_command(tool_name, arguments) or "")
+    command = _unwrap_shell_wrappers(command)
+    candidates = [command, *_SHELL_SEGMENT_RE.split(command)]
+    return any(
+        pattern.search(_unwrap_shell_wrappers(candidate))
+        for candidate in candidates
+        for pattern in _HARDLINE_PATTERNS
+    )
 
 
 def _arguments_command(tool_name: str, arguments: Any) -> str | None:

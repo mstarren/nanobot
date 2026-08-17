@@ -67,8 +67,8 @@ response, the approval status, and the tool result.
 Yolo mode is a runtime toggle surfaced as a **YOLO pill in the composer**, to
 the right of the workspace access mode. While ON, gated tool calls are
 **auto-approved without triage or a human prompt**; the approval record is
-still attached to the tool event (status `auto_approved`, reason "YOLO mode
-is enabled — approved without review.").
+still attached to the tool event (status `auto_approved`, verdict `yolo`,
+empty reason) so the session timeline stays auditable.
 
 - Toggled live from the WebUI via `POST /api/approval/yolo` (`{enabled,
   session}`); no restart required. The toggle is **session-scoped**: pass the
@@ -76,9 +76,17 @@ is enabled — approved without review.").
   only; omit it to change the default for sessions without an explicit
   override. State is reported in the settings payload (`approval.yolo_mode`
   default + `approval.yolo_sessions` overrides) and resets when the gateway
-  restarts.
-- The hardline DENY floor still applies: hardline commands are always
-  reviewed, never auto-approved by yolo mode.
+  restarts. Overrides equal to the current default are pruned automatically,
+  so the map only ever holds non-default per-session state.
+- **Unified session mode**: when `agents.defaults.unified_session` is enabled,
+  every channel collapses to one shared session key. The per-session override
+  is then keyed by the raw `channel:chat_id` and resolved as a fallback, so
+  toggling the pill in one chat still only affects calls originating from
+  that chat — but the chats share history, so treat the pill as scoped to the
+  originating channel rather than to a distinct conversation.
+- The hardline floor still applies: hardline commands are always escalated to
+  a human review request, never auto-approved by yolo mode — including
+  chained, multi-line, `sudo`/`env`-prefixed, and `bash -c`-wrapped forms.
 - Yolo mode does not change triage behavior for any call that is not gated
   by the policy layer.
 
@@ -86,7 +94,11 @@ is enabled — approved without review.").
 
 - Pending requests live in gateway process memory; a restart drops them.
 - The hardline patterns are anchored shell commands (for example `rm -rf /`),
-  not a general sandbox — treat them as defense-in-depth, not a boundary.
+  not a general sandbox — treat them as defense-in-depth, not a boundary. The
+  matcher strips comments and leading `sudo`/`env` wrappers, unwraps
+  `bash -c`/`sh -c` indirection, and splits on newlines and
+  `&&`/`;`/`||`/`|` before matching, but it is still a regex floor, not a
+  shell parser.
 - The WebUI popup surfaces one request at a time (queue count is shown when
   several are pending).
 

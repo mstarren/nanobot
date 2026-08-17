@@ -254,11 +254,60 @@ async def test_pending_payload_shape_includes_expiry() -> None:
 @pytest.mark.parametrize(
     "command",
     [
+        # canonical forms
+        "rm -rf /",
+        "rm -rf /*",
+        "rm -fr /",
+        "rm -rf / --no-preserve-root",
+        "rm -rf --no-preserve-root /",
+        "rm --no-preserve-root -rf /",
+        # review corpus: multiline / chained / prefixed / commented
         "echo ok\nrm -rf /",
         "rm -rf / && echo done",
         "sudo rm -rf /",
-        "rm -rf /*",
+        "rm -rf / # cleaning up",
+        "echo hi; mkfs.ext4 /dev/sda",
+        "sudo mkfs.ext4 /dev/sda",
+        "sudo dd if=x of=/dev/sda",
+        "sudo reboot",
+        "echo hi\n:(){ :|:& };:",
+        "rm -rf / | cat",
+        "rm -rf / || true",
+        # shell -c indirection
+        "bash -c 'rm -rf /'",
+        "bash -c 'rm -rf /' && echo done",
+        "sh -c \"echo hi; rm -rf /\"",
+        "sudo bash -c ':(){ :|:& };:'",
+        "echo hi && bash -c 'rm -rf /'",
+        "echo hi | bash -c 'rm -rf /'",
+        # env prefixes
+        "env VAR=x rm -rf /",
+        "VAR=x rm -rf /",
+        "VAR=x OTHER=y sudo rm -rf /",
+        "sudo -u root rm -rf /",
+        # quoted '#' must not hide the command
+        "echo \"# not a comment\"; rm -rf /",
     ],
 )
 def test_hardline_floor_covers_shell_compositions(command: str) -> None:
     assert _looks_hardline("exec", {"command": command}) is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo hello",
+        "ls -la",
+        "git status",
+        "rm -rf /tmp/scratch",
+        "rm -rf ./build",
+        "rm -rf /etc/hosts",
+        "dd if=/dev/zero of=/tmp/foo",
+        "bash -c 'echo hello'",
+        "VAR=x echo hi",
+        "sudo echo hi",
+        "echo \"# not a comment\"",
+    ],
+)
+def test_hardline_floor_ignores_benign_commands(command: str) -> None:
+    assert _looks_hardline("exec", {"command": command}) is False

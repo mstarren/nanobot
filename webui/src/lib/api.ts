@@ -1,7 +1,6 @@
 import type {
   ApiServicePayload,
   ApprovalPayload,
-  ApprovalRequestInfo,
   AutomationsPayload,
   AutomationUpdatePayload,
   ChannelConfigurePayload,
@@ -605,7 +604,6 @@ export interface YoloModePayload {
   ok: boolean;
   yolo_mode: boolean;
   yolo_sessions: Record<string, boolean>;
-  requests: ApprovalRequestInfo[];
 }
 
 /** Flip the approval gate's yolo mode for one session (auto-approve gated calls). */

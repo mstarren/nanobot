@@ -34,16 +34,15 @@ export function ToolApprovalPanel({
     denied: { label: "Denied", tone: "error", icon: ShieldAlert },
     pending: { label: "Pending", tone: "active", icon: ShieldCheck },
     cancelled: { label: "Cancelled", tone: "muted", icon: ShieldX },
+    // Yolo-mode auto-approvals skip triage entirely: badge reads "Yolo" in the
+    // pill's orange instead of the generic success tone.
+    yolo: { label: "Yolo", tone: "yolo", icon: ShieldCheck },
   };
-  // Yolo-mode auto-approvals skip triage entirely: badge reads "Yolo" in the
-  // pill's orange instead of the generic success tone.
-  const meta = approval.yolo
-    ? { label: "Yolo", tone: "yolo", icon: ShieldCheck }
-    : (statusMeta[approval.status] ?? {
-        label: approval.status,
-        tone: "muted",
-        icon: ShieldCheck,
-      });
+  const meta = statusMeta[approval.yolo ? "yolo" : approval.status] ?? {
+    label: approval.status,
+    tone: "muted",
+    icon: ShieldCheck,
+  };
   const StatusIcon = meta.icon;
 
   const verdictLabel =
@@ -101,7 +100,7 @@ export function ToolApprovalPanel({
           >
             <StatusIcon className="h-3 w-3" aria-hidden />
             {t(
-              approval.yolo ? "app.approval.status.yolo" : `app.approval.status.${approval.status}`,
+              `app.approval.status.${approval.yolo ? "yolo" : approval.status}`,
               { defaultValue: meta.label },
             )}
           </span>

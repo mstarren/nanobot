@@ -748,7 +748,6 @@ describe("webui API helpers", () => {
       ok: true,
       yolo_mode: true,
       yolo_sessions: { "websocket:chat-1": true },
-      requests: [],
     });
     const payload = await setYoloMode(mutationTransport, "websocket:chat-1", true);
 

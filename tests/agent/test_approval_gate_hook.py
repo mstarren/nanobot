@@ -288,3 +288,26 @@ async def test_hardline_yolo_requires_human_even_if_triage_would_approve() -> No
     assert ok
     with pytest.raises(ApprovalDeniedError):
         await task
+
+
+async def test_hardline_indirection_yolo_requires_human() -> None:
+    """bash -c / env-wrapped hardline commands still hit the human floor under yolo."""
+    bus = FakeBus()
+    hook = make_hook(bus, gate_tools=[], yolo_mode=True)
+    hook._runtime_getter = lambda session_key: make_runtime("APPROVE")
+    task = asyncio.create_task(
+        hook.before_execute_tool(
+            context(),
+            tool_call(arguments={"command": "bash -c 'rm -rf /'"}),
+            None,
+            {"command": "bash -c 'rm -rf /'"},
+        )
+    )
+    pending = await _wait_for_pending(get_approval_gate())
+    assert pending
+    assert pending[0]["triage_raw"] == ""
+    assert "hardline" in pending[0]["reason"].lower()
+    ok, _ = get_approval_gate().respond(pending[0]["id"], "deny")
+    assert ok
+    with pytest.raises(ApprovalDeniedError):
+        await task
