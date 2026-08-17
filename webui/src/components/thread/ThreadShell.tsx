@@ -331,6 +331,9 @@ interface ThreadShellProps {
   workspaceScopeDisabled?: boolean;
   workspaceError?: string | null;
   onWorkspaceScopeChange?: (scope: WorkspaceScopePayload) => void;
+  /** Yolo mode (auto-approve gated tool calls) state + toggle. */
+  yoloMode?: boolean;
+  onYoloModeChange?: (enabled: boolean) => void;
   settingsSnapshot?: SettingsPayload | null;
   onOpenModelSettings?: () => void;
   skills?: SkillSummary[];
@@ -627,6 +630,8 @@ export function ThreadShell({
   workspaceScopeDisabled = false,
   workspaceError = null,
   onWorkspaceScopeChange,
+  yoloMode,
+  onYoloModeChange,
   settingsSnapshot = null,
   onOpenModelSettings,
   skills = [],
@@ -1475,6 +1480,8 @@ export function ThreadShell({
             workspaceControls?.can_pick_folder ? pickWorkspaceFolder : undefined
           }
           onWorkspaceScopeChange={onWorkspaceScopeChange}
+          yoloMode={yoloMode}
+          onYoloModeChange={onYoloModeChange}
           pendingQueueKey={temporary ? null : chatId}
           transcriptionProvider={settingsSnapshot?.transcription?.provider}
           ingressLimits={ingressLimits}
@@ -1523,6 +1530,8 @@ export function ThreadShell({
             workspaceControls?.can_pick_folder ? pickWorkspaceFolder : undefined
           }
           onWorkspaceScopeChange={onWorkspaceScopeChange}
+          yoloMode={yoloMode}
+          onYoloModeChange={onYoloModeChange}
           transcriptionProvider={settingsSnapshot?.transcription?.provider}
           ingressLimits={ingressLimits}
         />

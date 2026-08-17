@@ -48,6 +48,11 @@
       "expiresInline": "O código expira {{expires}}.",
       "queueCount": "{{count}} pendentes",
       "noMatch": "Nenhuma solicitação pendente corresponde a este código."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {
@@ -1354,6 +1359,13 @@
         "defaultShort": "Padrão",
         "full": "Acesso total",
         "fullShort": "Total"
+      },
+      "yolo": {
+        "label": "YOLO",
+        "labelOff": "HITL",
+        "aria": "Modo YOLO: {{state}}",
+        "on": "Modo YOLO: ATIVADO — chamadas de ferramentas são aprovadas sem revisão",
+        "off": "Modo YOLO: DESATIVADO — chamadas arriscadas são revisadas antes de executar"
       }
     },
     "scrollToBottom": "Rolar para o final",

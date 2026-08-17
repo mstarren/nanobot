@@ -27,7 +27,9 @@ from nanobot.bus.outbound_events import ProgressEvent
 from nanobot.providers.base import ToolCallRequest
 from nanobot.security.approval_gate import (
     TRIAGE_APPROVE,
+    TRIAGE_ESCALATE,
     ApprovalDeniedError,
+    _looks_hardline,
     approval_prompt_text,
     approval_ui_payload,
     get_approval_gate,
@@ -43,6 +45,7 @@ def _attach_approval_info(
     triage_raw: str,
     request_id: str | None,
     expires_in_seconds: float | None = None,
+    yolo: bool = False,
 ) -> None:
     """Attach structured approval info to the tool call.
 
@@ -60,6 +63,8 @@ def _attach_approval_info(
     }
     if expires_in_seconds is not None:
         info["expires_in_seconds"] = expires_in_seconds
+    if yolo:
+        info["yolo"] = True
     try:
         tool_call.approval_info = info
     except Exception:  # noqa: BLE001 - metadata must never break the gate
@@ -83,6 +88,7 @@ class ApprovalGateHook(AgentHook):
         self._channel = channel
         self._chat_id = chat_id
         self._session_key = session_key or ""
+        self._raw_session_key = f"{channel}:{chat_id}" if channel and chat_id else ""
         self._runtime_getter = runtime_getter
 
     async def before_execute_tool(
@@ -103,19 +109,44 @@ class ApprovalGateHook(AgentHook):
         if not gate.needs_approval(tool_call.name, arguments):
             return
 
-        runtime = self._runtime(session_key=self._session_key)
-        if runtime is None:
-            logger.warning(
-                "Approval gate: no runtime for tool={} — allowing (fail-open)",
+        hardline = _looks_hardline(tool_call.name, arguments)
+        if gate.yolo_mode_for(self._session_key, self._raw_session_key) and not hardline:
+            # Yolo mode: skip triage and the human prompt, approve outright.
+            # The hardline DENY floor still applies and is always reviewed.
+            logger.info(
+                "Approval gate: yolo mode auto-approved tool={} call_id={}",
                 tool_call.name,
+                tool_call.id,
+            )
+            _attach_approval_info(
+                tool_call,
+                status="auto_approved",
+                verdict="yolo",
+                reason="",
+                triage_raw="",
+                request_id=None,
+                yolo=True,
             )
             return
 
-        verdict, reason, triage_raw = await gate.smart_triage(
-            runtime,
-            tool_call.name,
-            arguments,
-        )
+        if hardline:
+            verdict = TRIAGE_ESCALATE
+            reason = "This command matches the hardline safety floor and requires human review."
+            triage_raw = ""
+        else:
+            runtime = self._runtime(session_key=self._session_key)
+            if runtime is None:
+                logger.warning(
+                    "Approval gate: no runtime for tool={} — allowing (fail-open)",
+                    tool_call.name,
+                )
+                return
+
+            verdict, reason, triage_raw = await gate.smart_triage(
+                runtime,
+                tool_call.name,
+                arguments,
+            )
         if verdict == TRIAGE_APPROVE:
             logger.info(
                 "Approval gate: smart-approved tool={} call_id={}",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, ChevronDown, Folder, Hand } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Flame, Folder, Hand, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -366,6 +366,62 @@ export function WorkspaceAccessMenu({
         />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+export function YoloModePill({
+  enabled,
+  disabled = false,
+  isHero = false,
+  onChange,
+}: {
+  enabled: boolean;
+  disabled?: boolean;
+  isHero?: boolean;
+  onChange?: (enabled: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const label = t(
+    enabled ? "thread.composer.yolo.label" : "thread.composer.yolo.labelOff",
+    { defaultValue: enabled ? "YOLO" : "HITL" },
+  );
+  const stateLabel = t(
+    enabled ? "thread.composer.yolo.on" : "thread.composer.yolo.off",
+    {
+      defaultValue: enabled
+        ? "Yolo mode: ON — gated tool calls are approved without review"
+        : "Yolo mode: OFF — risky tool calls are reviewed before running",
+    },
+  );
+  const ariaLabel = t("thread.composer.yolo.aria", {
+    defaultValue: `Yolo mode: ${enabled ? "on" : "off"}`,
+    state: enabled ? "on" : "off",
+  });
+
+  return (
+    <button
+      type="button"
+      data-testid="yolo-mode-toggle"
+      aria-label={ariaLabel}
+      aria-pressed={enabled}
+      title={stateLabel}
+      disabled={disabled || !onChange}
+      onClick={() => onChange?.(!enabled)}
+      className={cn(
+        "thread-composer-access touch-target inline-flex min-w-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-control border border-transparent font-semibold shadow-none",
+        isHero ? "h-8 px-2.5 text-[12px]" : "h-9 px-3 text-[12.5px]",
+        enabled
+          ? "bg-transparent text-orange-600 hover:bg-orange-500/8 dark:text-orange-300 dark:hover:bg-orange-400/10"
+          : "bg-transparent text-muted-foreground hover:bg-foreground/[0.045] hover:text-foreground dark:hover:bg-white/[0.06]",
+      )}
+    >
+      {enabled ? (
+        <Flame className={cn("mr-1.5 shrink-0", isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} aria-hidden />
+      ) : (
+        <Zap className={cn("mr-1.5 shrink-0", isHero ? "h-3.5 w-3.5" : "h-3.5 w-3.5")} aria-hidden />
+      )}
+      <span className="min-w-0 truncate">{label}</span>
+    </button>
   );
 }
 

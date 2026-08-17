@@ -56,6 +56,7 @@ import {
   updateModelConfiguration,
   updateMcpServerTools,
   updateNetworkSafetySettings,
+  setYoloMode,
   updateProviderSettings,
   updateSettings,
   updateSkillEnabled,
@@ -740,6 +741,23 @@ describe("webui API helpers", () => {
       },
       20_000,
     );
+  });
+
+  it("flips yolo mode for one session through the approval mutation", async () => {
+    requestMutation.mockResolvedValueOnce({
+      ok: true,
+      yolo_mode: true,
+      yolo_sessions: { "websocket:chat-1": true },
+    });
+    const payload = await setYoloMode(mutationTransport, "websocket:chat-1", true);
+
+    expect(requestMutation).toHaveBeenCalledWith(
+      "approval.yolo",
+      { enabled: true, session: "websocket:chat-1" },
+      20_000,
+    );
+    expect(payload.yolo_mode).toBe(true);
+    expect(payload.yolo_sessions).toEqual({ "websocket:chat-1": true });
   });
 
   it("serializes image generation settings updates", async () => {

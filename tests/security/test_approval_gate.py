@@ -100,6 +100,42 @@ async def test_smart_triage_disabled_escalates() -> None:
     assert verdict == TRIAGE_ESCALATE
 
 
+def test_yolo_mode_defaults_off_and_toggles() -> None:
+    gate = ApprovalGate(gate_tools=["exec"])
+    assert gate.yolo_mode is False
+    gate.set_yolo_mode(True)
+    assert gate.yolo_mode is True
+    gate.set_yolo_mode(False)
+    assert gate.yolo_mode is False
+
+
+def test_yolo_mode_is_session_scoped() -> None:
+    gate = ApprovalGate(gate_tools=["exec"])
+    assert gate.yolo_mode_for("websocket:chat-1") is False
+    gate.set_yolo_mode(True, session_key="websocket:chat-1")
+    assert gate.yolo_mode_for("websocket:chat-1") is True
+    # Other sessions keep the default; the global default is untouched.
+    assert gate.yolo_mode_for("websocket:chat-2") is False
+    assert gate.yolo_mode is False
+    assert gate.yolo_sessions_payload() == {"websocket:chat-1": True}
+    # Clearing the override falls back to the default again.
+    gate.set_yolo_mode(False, session_key="websocket:chat-1")
+    assert gate.yolo_mode_for("websocket:chat-1") is False
+    assert gate.yolo_sessions_payload() == {}
+
+
+def test_yolo_mode_resolves_raw_session_fallback() -> None:
+    gate = ApprovalGate(gate_tools=["exec"])
+    gate.set_yolo_mode(True, session_key="websocket:chat-1")
+    assert gate.yolo_mode_for("unified:default", "websocket:chat-1") is True
+
+
+def test_session_override_equal_to_default_is_pruned() -> None:
+    gate = ApprovalGate(gate_tools=["exec"], yolo_mode=True)
+    gate.set_yolo_mode(True, session_key="websocket:chat-1")
+    assert gate.yolo_sessions_payload() == {}
+
+
 def test_reasoning_detail_uses_last_paragraph() -> None:
     """The CoT fallback must surface the conclusion, not the opening
     task-restatement paragraph."""
@@ -213,3 +249,65 @@ async def test_pending_payload_shape_includes_expiry() -> None:
     # The request payload itself (used for the persisted audit record) also
     # carries a live expiry so the WebUI can render countdowns after the fact.
     assert "expires_in_seconds" in payload[0]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # canonical forms
+        "rm -rf /",
+        "rm -rf /*",
+        "rm -fr /",
+        "rm -rf / --no-preserve-root",
+        "rm -rf --no-preserve-root /",
+        "rm --no-preserve-root -rf /",
+        # review corpus: multiline / chained / prefixed / commented
+        "echo ok\nrm -rf /",
+        "rm -rf / && echo done",
+        "sudo rm -rf /",
+        "rm -rf / # cleaning up",
+        "echo hi; mkfs.ext4 /dev/sda",
+        "sudo mkfs.ext4 /dev/sda",
+        "sudo dd if=x of=/dev/sda",
+        "sudo reboot",
+        "echo hi\n:(){ :|:& };:",
+        "rm -rf / | cat",
+        "rm -rf / || true",
+        # shell -c indirection
+        "bash -c 'rm -rf /'",
+        "bash -c 'rm -rf /' && echo done",
+        "sh -c \"echo hi; rm -rf /\"",
+        "sudo bash -c ':(){ :|:& };:'",
+        "echo hi && bash -c 'rm -rf /'",
+        "echo hi | bash -c 'rm -rf /'",
+        # env prefixes
+        "env VAR=x rm -rf /",
+        "VAR=x rm -rf /",
+        "VAR=x OTHER=y sudo rm -rf /",
+        "sudo -u root rm -rf /",
+        # quoted '#' must not hide the command
+        "echo \"# not a comment\"; rm -rf /",
+    ],
+)
+def test_hardline_floor_covers_shell_compositions(command: str) -> None:
+    assert _looks_hardline("exec", {"command": command}) is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo hello",
+        "ls -la",
+        "git status",
+        "rm -rf /tmp/scratch",
+        "rm -rf ./build",
+        "rm -rf /etc/hosts",
+        "dd if=/dev/zero of=/tmp/foo",
+        "bash -c 'echo hello'",
+        "VAR=x echo hi",
+        "sudo echo hi",
+        "echo \"# not a comment\"",
+    ],
+)
+def test_hardline_floor_ignores_benign_commands(command: str) -> None:
+    assert _looks_hardline("exec", {"command": command}) is False

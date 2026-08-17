@@ -48,6 +48,11 @@
       "expiresInline": "Le code expire {{expires}}.",
       "queueCount": "{{count}} en attente",
       "noMatch": "Aucune demande en attente ne correspond à ce code."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {
@@ -614,17 +619,31 @@
       }
     },
     "api": {
-      "title": "Serveur API", "openaiCompatible": "API compatible OpenAI", "description": "Connectez des SDK et agents via un endpoint /v1 local.",
-      "start": "Démarrer le serveur API", "starting": "Démarrage...", "stop": "Arrêter", "stopping": "Arrêt...",
-      "access": "Accès", "thisDevice": "Cet appareil", "localNetwork": "Réseau local",
-      "localHelp": "Seul cet appareil peut se connecter.", "networkHelp": "D’autres appareils peuvent se connecter ; une clé API est requise.",
-      "port": "Port", "portHelp": "L’API utilise ce port local.", "apiKey": "Clé API", "apiKeyHelp": "Les clients l’envoient comme jeton Bearer.",
-      "apiKeyRequired": "Requise avant d’exposer l’API au réseau.", "apiKeyPlaceholder": "Saisissez une clé API",
+      "title": "Serveur API",
+      "openaiCompatible": "API compatible OpenAI",
+      "description": "Connectez des SDK et agents via un endpoint /v1 local.",
+      "start": "Démarrer le serveur API",
+      "starting": "Démarrage...",
+      "stop": "Arrêter",
+      "stopping": "Arrêt...",
+      "access": "Accès",
+      "thisDevice": "Cet appareil",
+      "localNetwork": "Réseau local",
+      "localHelp": "Seul cet appareil peut se connecter.",
+      "networkHelp": "D’autres appareils peuvent se connecter ; une clé API est requise.",
+      "port": "Port",
+      "portHelp": "L’API utilise ce port local.",
+      "apiKey": "Clé API",
+      "apiKeyHelp": "Les clients l’envoient comme jeton Bearer.",
+      "apiKeyRequired": "Requise avant d’exposer l’API au réseau.",
+      "apiKeyPlaceholder": "Saisissez une clé API",
       "autoInstall": "Le support API sera installé automatiquement au démarrage."
     },
     "observability": {
-      "title": "Observabilité", "configured": "Les identifiants de traçage sont disponibles pour nanobot.",
-      "environment": "Définissez LANGFUSE_SECRET_KEY et LANGFUSE_PUBLIC_KEY, puis redémarrez nanobot.", "enable": "Activer le traçage"
+      "title": "Observabilité",
+      "configured": "Les identifiants de traçage sont disponibles pour nanobot.",
+      "environment": "Définissez LANGFUSE_SECRET_KEY et LANGFUSE_PUBLIC_KEY, puis redémarrez nanobot.",
+      "enable": "Activer le traçage"
     },
     "legal": {
       "thirdPartyBrands": "Les noms, logos et marques de produits appartiennent à leurs propriétaires respectifs. Leur utilisation sert uniquement à l'identification et n'implique aucune approbation."
@@ -1303,7 +1322,7 @@
       },
       "encoding": "Traitement…",
       "remove": "Retirer la pièce jointe",
-    "normalizedSizeHint": "{{orig}} → {{current}} (automatique)",
+      "normalizedSizeHint": "{{orig}} → {{current}} (automatique)",
       "textTooLarge": "Le texte du message est trop volumineux (maximum {{max}})",
       "imageRejected": {
         "unsupported_type": "Type de fichier non pris en charge",
@@ -1340,6 +1359,13 @@
         "defaultShort": "Par défaut",
         "full": "Accès complet",
         "fullShort": "Complet"
+      },
+      "yolo": {
+        "label": "YOLO",
+        "labelOff": "HITL",
+        "aria": "Mode YOLO : {{state}}",
+        "on": "Mode YOLO : ACTIVÉ — les appels d'outils sont approuvés sans vérification",
+        "off": "Mode YOLO : DÉSACTIVÉ — les appels risqués sont examinés avant exécution"
       }
     },
     "scrollToBottom": "Faire défiler vers le bas",

@@ -34,8 +34,11 @@ export function ToolApprovalPanel({
     denied: { label: "Denied", tone: "error", icon: ShieldAlert },
     pending: { label: "Pending", tone: "active", icon: ShieldCheck },
     cancelled: { label: "Cancelled", tone: "muted", icon: ShieldX },
+    // Yolo-mode auto-approvals skip triage entirely: badge reads "Yolo" in the
+    // pill's orange instead of the generic success tone.
+    yolo: { label: "Yolo", tone: "yolo", icon: ShieldCheck },
   };
-  const meta = statusMeta[approval.status] ?? {
+  const meta = statusMeta[approval.yolo ? "yolo" : approval.status] ?? {
     label: approval.status,
     tone: "muted",
     icon: ShieldCheck,
@@ -91,14 +94,20 @@ export function ToolApprovalPanel({
               meta.tone === "success" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
               meta.tone === "error" && "bg-destructive/10 text-destructive",
               meta.tone === "active" && "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+              meta.tone === "yolo" && "bg-orange-500/10 text-orange-600 dark:text-orange-300",
               meta.tone === "muted" && "bg-muted text-muted-foreground",
             )}
           >
             <StatusIcon className="h-3 w-3" aria-hidden />
-            {t(`app.approval.status.${approval.status}`, { defaultValue: meta.label })}
+            {t(
+              `app.approval.status.${approval.yolo ? "yolo" : approval.status}`,
+              { defaultValue: meta.label },
+            )}
           </span>
           <span className="truncate font-mono">{toolName}</span>
-          <span className="truncate italic text-muted-foreground/70">{verdictLabel}</span>
+          {!approval.yolo ? (
+            <span className="truncate italic text-muted-foreground/70">{verdictLabel}</span>
+          ) : null}
           <ChevronDown
             aria-hidden
             className={cn(
@@ -115,7 +124,7 @@ export function ToolApprovalPanel({
           data-testid="approval-details"
           className="mb-1 ml-[1.125rem] border-l-2 border-muted/45 pl-3 pr-1 text-[12px] leading-5 text-muted-foreground"
         >
-          {approval.reason ? (
+          {approval.reason && !approval.yolo ? (
             <div className="mb-1.5">
               <p className="font-medium text-foreground">
                 {t("app.approval.assessment", { defaultValue: "Assessment" })}
@@ -133,7 +142,7 @@ export function ToolApprovalPanel({
               {argsText}
             </pre>
           </div>
-          {hasTriageDetail ? (
+          {hasTriageDetail && !approval.yolo ? (
             <div className="mb-1.5">
               <p className="font-medium text-foreground">
                 {t("app.approval.triageResponse", { defaultValue: "Smart triage response" })}

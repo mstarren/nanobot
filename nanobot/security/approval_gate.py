@@ -55,37 +55,98 @@ class ApprovalDeniedError(Exception):
 TRIAGE_APPROVE = "approve"
 TRIAGE_DENY = "deny"
 TRIAGE_ESCALATE = "escalate"
-
-# Hardline floor: these are never approvable, even with "all" gating.
+# Hardline floor: these commands always require an explicit human decision.
+# Patterns deliberately match a command segment, not the whole shell script;
+# the caller strips comments and leading wrappers, then splits newlines and
+# common shell control operators before matching.
 _HARDLINE_PATTERNS = (
-    re.compile(r"^\s*rm\s+(-[a-z]*[rRfF]+[a-z]*\s+)+/\s*(--no-preserve-root)?\s*$"),
-    re.compile(r"^\s*mkfs\b"),
-    re.compile(r"^\s*dd\s+.*of=/dev/"),
-    re.compile(r"^\s*:\(\)\s*\{\s*:\|:&\s*\}\s*;"),
-    re.compile(r"^\s*shutdown\b|^\s*poweroff\b|^\s*reboot\b"),
+    re.compile(
+        r"^\s*rm\s+(?:(?:-[a-z]*[rRfF][a-z]*|--no-preserve-root)\s+)+/(?:\*)?(?:\s|$)",
+        re.I,
+    ),
+    re.compile(r"^\s*mkfs\b", re.I),
+    re.compile(r"^\s*dd\s+.*\bof=/dev/", re.I),
+    re.compile(r"^\s*:\(\)\s*\{\s*:", re.I),
+    re.compile(r"^\s*(?:shutdown|poweroff|reboot)\b", re.I),
 )
+_SUDO_PREFIX_RE = re.compile(
+    r"^\s*sudo(?:\s+--|\s+-[^\s]+(?:\s+[^\s]+)?)*\s+", re.I
+)
+_ENV_PREFIX_RE = re.compile(
+    r"^\s*(?:env\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\S+)\s+)+"
+)
+_SHELL_C_RE = re.compile(
+    r"^\s*(?:bash|sh|zsh|dash|ksh|fish)(?:\s+-[a-zA-Z]+)*\s+-c\s+"
+    r"(?:'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))",
+    re.I | re.S,
+)
+_SHELL_SEGMENT_RE = re.compile(r"\r?\n|&&|\|\||;|\|")
 
 _SHELL_TOOLS = {"exec", "run_command", "shell", "cmd", "execute"}
 
 _SECRET_KEY_RE = re.compile(r"(token|secret|password|api[_-]?key|authorization|credential)", re.I)
 
-_COMMENT_STRIP_RE = re.compile(r"\s+#.*$")
-
 
 def _strip_shell_comments(command: str) -> str:
-    """Strip trailing shell comments to remove the easiest injection vector."""
-    lines: list[str] = []
-    for line in command.splitlines():
-        lines.append(_COMMENT_STRIP_RE.sub("", line.rstrip()))
-    return "\n".join(lines)
+    """Strip shell comments while respecting single/double-quoted strings.
+
+    A '#' starts a comment only when it is not inside quotes and sits at a
+    word boundary (line start or preceded by whitespace), matching shell
+    lexing closely enough that `echo "# not a comment"; rm -rf /` keeps the
+    quoted text and still exposes the command.
+    """
+    out: list[str] = []
+    in_single = False
+    in_double = False
+    i = 0
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif (
+            char == "#"
+            and not in_single
+            and not in_double
+            and (i == 0 or command[i - 1].isspace())
+        ):
+            while i < n and command[i] != "\n":
+                i += 1
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
+def _unwrap_shell_wrappers(command: str) -> str:
+    """Strip leading sudo/env wrappers and shell `-c` indirection so the
+    anchored hardline patterns see the real command."""
+    for _ in range(5):
+        stripped = _SUDO_PREFIX_RE.sub("", command, count=1)
+        stripped = _ENV_PREFIX_RE.sub("", stripped, count=1)
+        match = _SHELL_C_RE.match(stripped)
+        if match:
+            stripped = next(group for group in match.groups() if group is not None)
+        if stripped == command:
+            return command
+        command = stripped
+    return command
 
 
 def _looks_hardline(tool_name: str, arguments: Any) -> bool:
     """Return True for catastrophic commands that no approval may allow."""
     if tool_name not in _SHELL_TOOLS:
         return False
-    command = _arguments_command(tool_name, arguments)
-    return any(pattern.search(command or "") for pattern in _HARDLINE_PATTERNS)
+    command = _strip_shell_comments(_arguments_command(tool_name, arguments) or "")
+    command = _unwrap_shell_wrappers(command)
+    candidates = [command, *_SHELL_SEGMENT_RE.split(command)]
+    return any(
+        pattern.search(_unwrap_shell_wrappers(candidate))
+        for candidate in candidates
+        for pattern in _HARDLINE_PATTERNS
+    )
 
 
 def _arguments_command(tool_name: str, arguments: Any) -> str | None:
@@ -209,6 +270,7 @@ class ApprovalGate:
         timeout_seconds: float = 600.0,
         smart_policy: str = "",
         triage_model: str | None = None,
+        yolo_mode: bool = False,
     ) -> None:
         self._gate_tools = list(gate_tools) if gate_tools is not None else _default_gate_tools()
         self._gate_all = "all" in self._gate_tools
@@ -216,7 +278,54 @@ class ApprovalGate:
         self._timeout_seconds = timeout_seconds
         self._smart_policy = smart_policy
         self._triage_model = triage_model
+        self._yolo_mode = bool(yolo_mode)
+        self._yolo_sessions: dict[str, bool] = {}
         self._pending: dict[str, ApprovalRequest] = {}
+
+    # -- runtime toggles ----------------------------------------------------
+
+    @property
+    def yolo_mode(self) -> bool:
+        """Default yolo mode for sessions without an explicit override."""
+        return self._yolo_mode
+
+    def yolo_mode_for(self, session_key: str, fallback_session_key: str = "") -> bool:
+        """Yolo state for one session, with a raw-key fallback for unified chats."""
+        if session_key in self._yolo_sessions:
+            return self._yolo_sessions[session_key]
+        if fallback_session_key and fallback_session_key in self._yolo_sessions:
+            return self._yolo_sessions[fallback_session_key]
+        return self._yolo_mode
+
+    def set_yolo_mode(self, enabled: bool, session_key: str | None = None) -> None:
+        """Flip yolo mode at runtime (WebUI pill; no restart needed).
+
+        With a session key the toggle is scoped to that session only; without
+        one it changes the default for sessions that have no explicit override.
+        The hardline DENY floor still applies: ``_looks_hardline`` calls are
+        always reviewed, never auto-approved by yolo mode.
+        """
+        enabled = bool(enabled)
+        if session_key:
+            if enabled == self._yolo_mode:
+                self._yolo_sessions.pop(session_key, None)
+            else:
+                self._yolo_sessions[session_key] = enabled
+            logger.info(
+                "Approval gate: yolo mode {} for session={}",
+                "enabled (auto-approving gated calls)" if enabled else "disabled",
+                session_key,
+            )
+        else:
+            self._yolo_mode = enabled
+            logger.info(
+                "Approval gate: yolo mode {} (default)",
+                "enabled (auto-approving gated calls)" if enabled else "disabled",
+            )
+
+    def yolo_sessions_payload(self) -> dict[str, bool]:
+        """Per-session yolo overrides for the settings payload."""
+        return dict(self._yolo_sessions)
 
     # -- policy -----------------------------------------------------------
 
@@ -458,6 +567,7 @@ def configure_approval_gate(**kwargs: Any) -> ApprovalGate:
         timeout_seconds=kwargs.get("timeout_seconds", 600.0),
         smart_policy=kwargs.get("smart_policy", ""),
         triage_model=kwargs.get("triage_model"),
+        yolo_mode=kwargs.get("yolo_mode", False),
     )
     _gate = gate
     return gate

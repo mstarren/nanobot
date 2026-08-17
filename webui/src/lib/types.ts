@@ -291,6 +291,8 @@ export interface ApprovalRecord {
   request_id?: string | null;
   expires_in_seconds?: number;
   decided_at_ms?: number;
+  /** True when the call was auto-approved by yolo mode (no triage review). */
+  yolo?: boolean;
 }
 
 export interface ToolProgressEvent {
@@ -709,6 +711,12 @@ export interface SettingsPayload {
     active_days_30d: number;
     requests_30d: number;
     updated_at?: string | null;
+  };
+  approval?: {
+    /** Default yolo mode for sessions without an explicit override. */
+    yolo_mode: boolean;
+    /** Per-session yolo overrides keyed by session key. */
+    yolo_sessions: Record<string, boolean>;
   };
   advanced: {
     restrict_to_workspace: boolean;

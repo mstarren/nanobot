@@ -105,6 +105,15 @@ def system_settings_payload(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         workspace=config.workspace_path,
     )
+    try:
+        from nanobot.security.approval_gate import get_approval_gate
+
+        gate = get_approval_gate()
+        yolo_mode = bool(gate.yolo_mode) if gate is not None else False
+        yolo_sessions = gate.yolo_sessions_payload() if gate is not None else {}
+    except Exception:  # noqa: BLE001 - settings must load even if the gate is unavailable
+        yolo_mode = False
+        yolo_sessions = {}
     return {
         "runtime": {
             "config_path": str(config_path.expanduser()),
@@ -122,6 +131,10 @@ def system_settings_payload(
             "unified_session": defaults.unified_session,
         },
         "usage": token_usage_payload(timezone_name=defaults.timezone),
+        "approval": {
+            "yolo_mode": yolo_mode,
+            "yolo_sessions": yolo_sessions,
+        },
         "advanced": {
             "restrict_to_workspace": config.tools.restrict_to_workspace,
             "workspace_sandbox": sandbox_status.as_dict(),
@@ -411,6 +424,8 @@ class SystemSettingsHandler:
             return self._approval_list()
         if action == "approval-respond":
             return self._approval_respond(request)
+        if action == "approval-yolo":
+            return self._approval_yolo(request)
         if action == "mcp-list":
             return await self._mcp_presets(request, None, operations)
         if action.startswith("mcp-"):
@@ -905,6 +920,39 @@ class SystemSettingsHandler:
                 "requests": gate.pending_payload(),
                 "ok": True,
                 "message": message,
+            }
+        )
+
+    def _approval_yolo(self, request: SettingsRequest) -> SettingsRouteResult:
+        """Toggle yolo mode (auto-approve gated calls) at runtime.
+
+        Scoped to one session when ``session`` is given (WebUI pill); without
+        it the toggle changes the default for sessions that have no explicit
+        override. The hardline DENY floor always applies.
+        """
+        from nanobot.security.approval_gate import get_approval_gate
+
+        gate = get_approval_gate()
+        if gate is None:
+            return SettingsRouteResult.failure(503, "approval gate not configured")
+        raw_enabled = query_first(request.query, "enabled")
+        if raw_enabled is None:
+            return SettingsRouteResult.failure(400, "'enabled' is required and must be boolean")
+        try:
+            from nanobot.webui.settings_contracts import parse_bool
+
+            enabled = parse_bool(raw_enabled, "enabled")
+        except WebUISettingsError as exc:
+            return SettingsRouteResult.failure(exc.status, exc.message)
+        session = (query_first(request.query, "session") or "").strip()
+        if len(session) > 256:
+            return SettingsRouteResult.failure(400, "session key too long")
+        gate.set_yolo_mode(enabled, session_key=session or None)
+        return SettingsRouteResult.success(
+            {
+                "ok": True,
+                "yolo_mode": gate.yolo_mode,
+                "yolo_sessions": gate.yolo_sessions_payload(),
             }
         )
 

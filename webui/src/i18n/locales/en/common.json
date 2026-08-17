@@ -48,6 +48,11 @@
       "expiresInline": "Code expires {{expires}}.",
       "queueCount": "{{count}} pending",
       "noMatch": "No pending request matches this code."
+    },
+    "approval": {
+      "status": {
+        "yolo": "Yolo"
+      }
     }
   },
   "temporaryChat": {
@@ -1354,6 +1359,13 @@
         "defaultShort": "Default",
         "full": "Full Access",
         "fullShort": "Full"
+      },
+      "yolo": {
+        "label": "YOLO",
+        "labelOff": "HITL",
+        "aria": "Yolo mode: {{state}}",
+        "on": "Yolo mode: ON — gated tool calls are approved without review",
+        "off": "Yolo mode: OFF — risky tool calls are reviewed before running"
       }
     },
     "scrollToBottom": "Scroll to bottom",

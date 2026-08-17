@@ -79,6 +79,7 @@ import {
   fetchSettings,
   fetchWorkspaces,
   runPairingAction,
+  setYoloMode,
 } from "@/lib/api";
 import {
   createRuntimeHost,
@@ -1244,6 +1245,8 @@ function Shell({
   const skills = useSkills(getToken);
   const pageVisible = usePageVisibility();
   const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsPayload | null>(null);
+  const [yoloDefault, setYoloDefault] = useState<boolean>(false);
+  const [yoloBySession, setYoloBySession] = useState<Record<string, boolean>>({});
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [draftWorkspaceScope, setDraftWorkspaceScope] =
     useState<WorkspaceScopePayload | null>(null);
@@ -1326,6 +1329,39 @@ function Shell({
       cancelled = true;
     };
   }, [getToken]);
+
+  useEffect(() => {
+    if (settingsSnapshot?.approval) {
+      setYoloDefault(settingsSnapshot.approval.yolo_mode ?? false);
+      setYoloBySession(settingsSnapshot.approval.yolo_sessions ?? {});
+    }
+  }, [settingsSnapshot]);
+
+  const yoloModeFor = useCallback(
+    (sessionKey: string | null | undefined): boolean | undefined => {
+      if (!sessionKey) return undefined;
+      return yoloBySession[sessionKey] ?? yoloDefault;
+    },
+    [yoloBySession, yoloDefault],
+  );
+
+  const onYoloModeChange = useCallback(
+    (sessionKey: string, enabled: boolean) => {
+      // Optimistic flip; reconcile with the gateway's answer and revert on error.
+      setYoloBySession((current) => ({ ...current, [sessionKey]: enabled }));
+      void setYoloMode(client, sessionKey, enabled)
+        .then((res) => {
+          setYoloDefault(res.yolo_mode);
+          setYoloBySession(res.yolo_sessions);
+        })
+        .catch(() => {
+          fetchSettings(getToken())
+            .then((payload) => setSettingsSnapshot(payload))
+            .catch(() => undefined);
+        });
+    },
+    [client, getToken],
+  );
 
   useEffect(() => {
     try {
@@ -3016,6 +3052,10 @@ function Shell({
                         workspaceError={workspaceError}
                         onWorkspaceScopeChange={applyWorkspaceScope}
                         settingsSnapshot={settingsSnapshot}
+                        yoloMode={yoloModeFor(activeSession?.key)}
+                        onYoloModeChange={(enabled) => {
+                          if (activeSession?.key) onYoloModeChange(activeSession.key, enabled);
+                        }}
                         onOpenModelSettings={onOpenModelSettings}
                         skills={skills}
                       />
@@ -3073,6 +3113,8 @@ function Shell({
                         client.setWorkspaceScope(paneSession.chatId, next);
                       }}
                       settingsSnapshot={settingsSnapshot}
+                      yoloMode={yoloModeFor(paneSession.key)}
+                      onYoloModeChange={(enabled) => onYoloModeChange(paneSession.key, enabled)}
                       onOpenModelSettings={onOpenModelSettings}
                       skills={skills}
                     />
