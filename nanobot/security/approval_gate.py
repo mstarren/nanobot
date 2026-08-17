@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import re
 import time
@@ -43,9 +42,7 @@ from typing import Any
 
 from loguru import logger as loguru_logger
 
-logger = logging.getLogger("nanobot.approval_gate")
-
-APPROVAL_META_KEY = "_approval_request"
+logger = loguru_logger
 
 
 class ApprovalDeniedError(Exception):
@@ -67,9 +64,33 @@ _HARDLINE_PATTERNS = (
 
 _SHELL_TOOLS = {"exec", "run_command", "shell", "cmd", "execute"}
 
-_SECRET_KEY_RE = re.compile(r"(token|secret|password|api[_-]?key|authorization|credential)", re.I)
-
+_SECRET_KEY_RE = re.compile(
+    r"(token|secret|password|api[_-]?key|authorization|credential)", re.I
+)
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)(\b(?:token|secret|password|api[_-]?key|authorization|credential)\b\s*=\s*)[^\s;&|]+"
+)
+_SECRET_FLAG_RE = re.compile(
+    r"(?i)(--?(?:token|secret|password|api[_-]?key|authorization|credential)\s+)[^\s;&|]+"
+)
 _COMMENT_STRIP_RE = re.compile(r"\s+#.*$")
+
+
+def _redact_sensitive(value: Any) -> Any:
+    """Return a display/provider-safe copy without changing tool execution args."""
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if _SECRET_KEY_RE.search(str(key)) else _redact_sensitive(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_sensitive(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_sensitive(item) for item in value)
+    if isinstance(value, str):
+        value = _SECRET_ASSIGNMENT_RE.sub(r"\1[REDACTED]", value)
+        return _SECRET_FLAG_RE.sub(r"\1[REDACTED]", value)
+    return value
 
 
 def _strip_shell_comments(command: str) -> str:
@@ -102,11 +123,11 @@ def _tool_arguments_text(tool_name: str, arguments: Any) -> str:
     """Compact text form of a tool call for the triage LLM."""
     command = _arguments_command(tool_name, arguments)
     if command is not None:
-        return command
+        return _redact_sensitive(command)
     try:
-        return json.dumps(arguments, ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(_redact_sensitive(arguments), ensure_ascii=False, separators=(",", ":"))
     except (TypeError, ValueError):
-        return repr(arguments)
+        return repr(_redact_sensitive(arguments))
 
 
 def _default_gate_tools() -> list[str]:
@@ -247,7 +268,7 @@ class ApprovalGate:
         request = ApprovalRequest(
             id=uuid.uuid4().hex[:12],
             tool_name=tool_name,
-            arguments=arguments,
+            arguments=_redact_sensitive(arguments),
             verdict=verdict,
             reason=reason,
             triage_raw=triage_raw,
@@ -260,7 +281,7 @@ class ApprovalGate:
         )
         self._pending[request.id] = request
         logger.info(
-            "Approval required: tool=%s verdict=%s id=%s",
+            "Approval required: tool={} verdict={} id={}",
             tool_name,
             verdict,
             request.id,
@@ -279,7 +300,7 @@ class ApprovalGate:
         request.future.set_result(approved)
         self._pending.pop(request_id, None)
         logger.info(
-            "Approval resolved: id=%s tool=%s decision=%s",
+            "Approval resolved: id={} tool={} decision={}",
             request_id,
             request.tool_name,
             decision,
@@ -292,7 +313,7 @@ class ApprovalGate:
             return await asyncio.wait_for(request.future, timeout=self._timeout_seconds)
         except asyncio.TimeoutError:
             logger.warning(
-                "Approval %s timed out after %ss; treating as denied",
+                "Approval {} timed out after {}s; treating as denied",
                 request.id,
                 self._timeout_seconds,
             )
@@ -343,7 +364,7 @@ class ApprovalGate:
                 "",
             )
 
-        command = _tool_arguments_text(tool_name, arguments)
+        command = _tool_arguments_text(tool_name, _redact_sensitive(arguments))
         if tool_name in _SHELL_TOOLS:
             command = _strip_shell_comments(command)
 
@@ -481,7 +502,7 @@ def approval_gate_from_env() -> dict[str, Any]:
         try:
             kwargs["timeout_seconds"] = float(timeout)
         except ValueError:
-            logger.warning("Ignoring invalid NANOBOT_APPROVAL_TIMEOUT_SECONDS=%r", timeout)
+            logger.warning("Ignoring invalid NANOBOT_APPROVAL_TIMEOUT_SECONDS={}", timeout)
     model = os.environ.get("NANOBOT_APPROVAL_MODEL", "").strip()
     if model:
         kwargs["triage_model"] = model
@@ -493,6 +514,12 @@ def approval_gate_from_env() -> dict[str, Any]:
 
 def get_approval_gate() -> ApprovalGate | None:
     return _gate
+
+
+def reset_approval_gate() -> None:
+    """Clear the process-wide gate; intended for tests and controlled teardown."""
+    global _gate
+    _gate = None
 
 
 def approval_prompt_text(request: ApprovalRequest) -> str:

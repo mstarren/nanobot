@@ -19,7 +19,10 @@ no persistence for pending requests across gateway restarts.
      `destroy`, `unlink`), or
    - the tool is in `NANOBOT_APPROVAL_GATE_TOOLS` (or `all` is set).
 2. **Smart triage** — an auxiliary LLM call (temperature 0, small output
-   budget) classifies the call as `APPROVE`, `DENY`, or `ESCALATE`. The tool
+   budget) classifies the call as `APPROVE`, `DENY`, or `ESCALATE`. Hardline
+   commands bypass triage and go directly to human review; the triage model
+   can never auto-approve them. If the session runtime is unavailable, the
+   call also goes directly to human review (and then timeout-denies). The tool
    call is wrapped in `<tool_call>` delimiters and treated as **untrusted
    input** in the triage system prompt; shell comments are stripped. Any
    triage failure or ambiguity **escalates to a human** (fail-closed).
@@ -52,10 +55,15 @@ response, the approval status, and the tool result.
 
 ## Security model
 
-- **Fail-closed**: triage errors, disabled triage, and timeouts all escalate or
-  deny; they never silently approve.
+- **Fail-closed**: triage errors, disabled triage, missing runtime, and
+  timeouts all escalate or deny; they never silently approve.
+- **Secret minimization**: values under keys containing `token`, `secret`,
+  `password`, `api-key`, `authorization`, or `credential` are redacted before
+  triage and before the persisted approval prompt/audit record. Shell-style
+  assignments and matching long options are redacted as well. The original
+  arguments are still used for tool execution.
 - **Unbypassable floor**: the hardline patterns are evaluated before any
-  configuration and can never be turned off.
+  configuration and can never be turned off — **including in yolo mode**.
 - **Anti-injection hygiene**: the tool call is untrusted input to the triage
   model; operator policy only ever lives in the system prompt.
 - **Headless sessions** (cron, CLI, non-WebUI channels) have no interactive

@@ -13,6 +13,7 @@ from nanobot.security.approval_gate import (
     ApprovalGate,
     _looks_hardline,
     _reasoning_detail,
+    _redact_sensitive,
     approval_prompt_text,
 )
 
@@ -49,6 +50,20 @@ def test_hardline_floor_is_always_gated() -> None:
     # Even an empty tool list cannot bypass the hardline floor.
     gate = make_gate(gate_tools=[])
     assert gate.needs_approval("exec", {"command": "rm " + "-rf /"}) is True
+
+
+def test_sensitive_arguments_are_redacted_for_review_surfaces() -> None:
+    arguments = {
+        "api_token": "top-secret",
+        "nested": {"password": "hunter2"},
+        "command": "TOKEN=inline-secret curl --api-key cli-secret example.test",
+    }
+    redacted = _redact_sensitive(arguments)
+    assert redacted["api_token"] == "[REDACTED]"
+    assert redacted["nested"]["password"] == "[REDACTED]"
+    assert "top-secret" not in str(redacted)
+    assert "inline-secret" not in redacted["command"]
+    assert "cli-secret" not in redacted["command"]
 
 
 def test_gate_all_gates_every_tool() -> None:

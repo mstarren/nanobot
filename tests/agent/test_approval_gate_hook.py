@@ -13,6 +13,7 @@ from nanobot.security.approval_gate import (
     ApprovalDeniedError,
     configure_approval_gate,
     get_approval_gate,
+    reset_approval_gate,
 )
 
 
@@ -122,6 +123,25 @@ async def test_escalate_and_user_deny_raises_denied_error() -> None:
         await task
 
 
+async def test_hardline_command_bypasses_approve_triage() -> None:
+    bus = FakeBus()
+    hook = make_hook(bus, gate_tools=[])
+    task = asyncio.create_task(
+        hook.before_execute_tool(
+            context(),
+            tool_call(arguments={"command": "rm " + "-rf /"}),
+            None,
+            {"command": "rm " + "-rf /"},
+        )
+    )
+    pending = await _wait_for_pending(get_approval_gate())
+    assert pending and pending[0]["reason"].startswith("hardline command")
+    ok, _ = get_approval_gate().respond(pending[0]["id"], "deny")
+    assert ok
+    with pytest.raises(ApprovalDeniedError):
+        await task
+
+
 async def test_hardline_command_gated_even_with_empty_tool_list() -> None:
     bus = FakeBus()
     hook = make_hook(bus, gate_tools=[])
@@ -144,18 +164,38 @@ async def test_hardline_command_gated_even_with_empty_tool_list() -> None:
         await task
 
 
-async def test_hook_is_noop_when_gate_not_configured() -> None:
-    configure_approval_gate(gate_tools=["exec"])  # ensure configured
+async def test_missing_runtime_escalates_to_human() -> None:
+    bus = FakeBus()
+    configure_approval_gate(gate_tools=["exec"], timeout_seconds=5)
+    hook = ApprovalGateHook(
+        bus=bus,
+        channel="websocket",
+        chat_id="chat-1",
+        session_key="ws:chat-1",
+        runtime_getter=lambda session_key: None,
+    )
+    task = asyncio.create_task(
+        hook.before_execute_tool(context(), tool_call(), None, {"command": "echo hi"})
+    )
+    pending = await _wait_for_pending(get_approval_gate())
+    assert pending and "no triage runtime" in pending[0]["reason"]
+    ok, _ = get_approval_gate().respond(pending[0]["id"], "deny")
+    assert ok
+    with pytest.raises(ApprovalDeniedError):
+        await task
+
+
+async def test_hook_factory_is_noop_when_gate_not_configured() -> None:
+    reset_approval_gate()
     from nanobot.agent.hook import AgentTurnHookContext
     from nanobot.agent.hooks.approval_gate import create_approval_gate_hook
 
-    # A fresh hook factory still produces a hook while the gate is configured.
     hook = create_approval_gate_hook(
         AgentTurnHookContext(channel="websocket", chat_id="c", session_key="s"),
         bus=None,
         runtime_getter=lambda session_key: None,
     )
-    assert hook is not None
+    assert hook is None
 
 
 async def _wait_for_pending(gate: Any, timeout: float = 2.0) -> list[dict[str, Any]]:
