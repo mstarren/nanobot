@@ -162,6 +162,29 @@ class TestTodoTool:
         ])
         assert store.read_milestones()[1]["todos"][0]["status"] == "pending"
 
+    async def test_execute_milestones_without_legacy_todos(self) -> None:
+        tool = TodoTool()
+        written = _payload(await tool.execute(milestones=[
+            {"id": "prepare", "name": "Prepare", "todos": [
+                {"id": "inspect", "content": "Inspect", "status": "pending"},
+            ]},
+        ]))
+        assert written["active_milestone"] == "prepare"
+        assert written["milestones"][0]["name"] == "Prepare"
+        assert written["todos"][0]["id"] == "inspect"
+
+    def test_milestone_plan_is_bounded_by_total_item_cap(self) -> None:
+        store = TodoStore()
+        milestones = [
+            {"id": str(index), "todos": [
+                {"id": f"{index}-{task}", "content": "x", "status": "pending"}
+                for task in range(256)
+            ]}
+            for index in range(64)
+        ]
+        store.write([], milestones=milestones)
+        assert len(store.read()) == MAX_TODO_ITEMS
+
     async def test_execute_write_and_read(self) -> None:
         tool = TodoTool()
         written = _payload(await tool.execute(todos=[

@@ -94,6 +94,7 @@ class TodoStore:
                     old["content"] = item["content"]
                 if raw.get("status") in VALID_STATUSES:
                     old["status"] = str(raw["status"]).strip().lower()
+            self._trim_total_items()
             self._enforce_progression()
             return self.read()
         if not merge:
@@ -114,8 +115,17 @@ class TodoStore:
                     else:
                         current["todos"].append(item)
                 current["todos"] = current["todos"][:MAX_TASKS_PER_MILESTONE]
+        self._trim_total_items()
         self._enforce_progression()
         return self.read()
+
+    def _trim_total_items(self) -> None:
+        remaining = MAX_TODO_ITEMS
+        for milestone in self._milestones:
+            milestone["todos"] = milestone["todos"][:remaining]
+            remaining -= len(milestone["todos"])
+            if remaining <= 0:
+                remaining = 0
 
     def read_milestones(self) -> list[dict[str, Any]]:
         return [
@@ -132,6 +142,7 @@ class TodoStore:
     def _normalize_milestones(self, milestones: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
         seen: set[str] = set()
+        total_items = 0
         for position, raw in enumerate(milestones[:MAX_MILESTONES]):
             if not isinstance(raw, dict):
                 continue
@@ -141,12 +152,19 @@ class TodoStore:
             seen.add(milestone_id)
             name = str(raw.get("name", "") or f"Milestone {position + 1}").strip()
             tasks = raw.get("todos", raw.get("tasks", []))
-            if not isinstance(tasks, list):
+            if not isinstance(tasks, list) or total_items >= MAX_TODO_ITEMS:
                 tasks = []
+            else:
+                tasks = self._dedupe_by_id(tasks)[:MAX_TASKS_PER_MILESTONE]
+                tasks = tasks[:MAX_TODO_ITEMS - total_items]
+            normalized_tasks = [
+                self._validate(item) for item in tasks if isinstance(item, dict)
+            ]
+            total_items += len(normalized_tasks)
             result.append({
                 "id": milestone_id,
                 "name": name[:MAX_MILESTONE_NAME_CHARS],
-                "todos": [self._validate(i) for i in self._dedupe_by_id(tasks)[:MAX_TASKS_PER_MILESTONE] if isinstance(i, dict)],
+                "todos": normalized_tasks,
             })
         return result
 
@@ -350,7 +368,7 @@ def todo_payload_from_result(result: Any) -> dict[str, Any] | None:
         "todos": {
             "type": "array",
             "description": "Legacy flat task items. Use milestones for ordered plans. Omit to read current list.",
-                "items": {
+            "items": {
                     "type": "object",
                     "properties": {
                         "id": {"type": "string", "description": "Unique item identifier"},
@@ -433,7 +451,7 @@ class TodoTool(Tool):
         """
         store = todo_store()
 
-        if todos is not None:
+        if todos is not None or milestones is not None:
             # Guard: LLM sometimes sends todos as a JSON string instead of a list
             if isinstance(todos, str):
                 try:
@@ -442,6 +460,8 @@ class TodoTool(Tool):
                     return json.dumps({
                         "error": "todos must be a list of objects, got unparseable string"
                     }, ensure_ascii=False)
+            if todos is None:
+                todos = []
             if not isinstance(todos, list):
                 return json.dumps({
                     "error": f"todos must be a list, got {type(todos).__name__}"
