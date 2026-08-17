@@ -257,3 +257,38 @@ class TestTodoPayloadFromResult:
         assert todo_payload_from_result({"todos": []}) is not None
         assert todo_payload_from_result("nope") is None
         assert todo_payload_from_result(None) is None
+
+
+    def test_flat_merge_updates_later_milestone_without_bypassing_progression(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "first", "name": "First", "todos": [
+                {"id": "a", "content": "finish first", "status": "pending"},
+            ]},
+            {"id": "second", "name": "Second", "todos": [
+                {"id": "b", "content": "build second", "status": "pending"},
+            ]},
+        ])
+
+        merged = store.write([{"id": "b", "status": "in_progress"}], merge=True)
+
+        by_id = {item["id"]: item for item in merged}
+        assert by_id["b"]["status"] == "pending"
+        assert by_id["a"]["status"] == "pending"
+        assert store.active_milestone_index() == 0
+
+    def test_flat_write_replaces_milestone_plan_with_default_group(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "first", "name": "First", "todos": [
+                {"id": "a", "content": "first", "status": "pending"},
+            ]},
+        ])
+
+        store.write([{"id": "flat", "content": "flat plan", "status": "pending"}])
+
+        assert store.read_milestones() == [{
+            "id": "default",
+            "name": "Tasks",
+            "todos": [{"id": "flat", "content": "flat plan", "status": "pending"}],
+        }]

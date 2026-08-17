@@ -471,3 +471,8 @@ class TodoTool(Tool):
             items = store.read()
 
         return json.dumps(_todo_payload(items, store.read_milestones()), ensure_ascii=False)
+
+
+def todo_injection_for_session(session_key: str | None) -> str | None:
+    """Return the active task block for context-compression reinjection."""
+    return _store_for_session(session_key).format_for_injection()

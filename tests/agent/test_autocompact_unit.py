@@ -730,3 +730,20 @@ class TestPrepareSession:
         _, summary = ac.prepare_session(session, "cli:test")
         assert "Hot summary." in summary
         # After hot path pops, cold path would kick in on next call
+
+
+    def test_reinjects_active_todo_list_with_compaction_summary(self, monkeypatch):
+        """A compacted turn carries the active todo plan back into context."""
+        ac = _make_autocompact()
+        session = _make_session()
+        ac._summaries["cli:test"] = ("Compacted conversation.", datetime(2026, 1, 1))
+        monkeypatch.setattr(
+            "nanobot.agent.autocompact.todo_injection_for_session",
+            lambda key: "[Your active task list was preserved across context compression]\n- [ ] build. build it (pending)",
+        )
+
+        _, summary = ac.prepare_session(session, "cli:test")
+
+        assert summary is not None
+        assert "Compacted conversation." in summary
+        assert "build. build it" in summary

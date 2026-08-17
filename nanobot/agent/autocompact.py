@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, cast
 
 from loguru import logger
 
+from nanobot.agent.tools.todo import todo_injection_for_session
 from nanobot.session.manager import MIN_COMPACTED_REPLAY_MESSAGES, Session, SessionManager
 
 if TYPE_CHECKING:
@@ -50,8 +51,15 @@ class AutoCompact:
         return session.last_consolidated < len(session.messages)
 
     @staticmethod
-    def _format_summary(text: str, last_active: datetime) -> str:
-        return f"Previous conversation summary (last active {last_active.isoformat()}):\n{text}"
+    def _format_summary(
+        text: str,
+        last_active: datetime,
+        todo_injection: str | None = None,
+    ) -> str:
+        summary = f"Previous conversation summary (last active {last_active.isoformat()}):\n{text}"
+        if todo_injection:
+            summary = f"{summary}\n\n{todo_injection}"
+        return summary
 
     @classmethod
     def _is_internal_session(cls, key: str) -> bool:
@@ -114,9 +122,10 @@ class AutoCompact:
             logger.info("Auto-compact: reloading session {} (archiving={})", key, key in self._archiving)
             session = self.sessions.get_or_create(key)
         # Hot path: summary from in-memory dict (process hasn't restarted).
+        todo_injection = todo_injection_for_session(key)
         entry = self._summaries.pop(key, None)
         if entry:
-            return session, self._format_summary(entry[0], entry[1])
+            return session, self._format_summary(entry[0], entry[1], todo_injection)
         # Cold path: summary persisted in session metadata (process restarted).
         # Persisted metadata may outlive schema changes; a malformed summary must
         # not abort turn preparation.
@@ -134,5 +143,5 @@ class AutoCompact:
                     )
                 except ValueError:
                     last_active = session.updated_at
-                return session, self._format_summary(text, last_active)
+                return session, self._format_summary(text, last_active, todo_injection)
         return session, None
