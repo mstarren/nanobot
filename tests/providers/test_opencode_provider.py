@@ -37,6 +37,7 @@ def test_opencode_specs_use_openai_compatible_gateways() -> None:
     assert go.detect_by_base_keyword == "opencode.ai/zen/go"
     assert go.default_api_base == "https://opencode.ai/zen/go/v1"
     assert "opencode-go" in go.strip_model_prefixes
+    assert go.responses_models == ("gpt-5.6-luna",)
 
 
 def test_find_by_name_opencode_providers() -> None:
@@ -120,3 +121,15 @@ def test_opencode_prefixes_are_stripped_before_request() -> None:
         tool_choice=None,
     )
     assert go_kwargs["model"] == "o3"
+
+
+def test_opencode_go_luna_uses_responses_api() -> None:
+    provider = OpenAICompatProvider(
+        api_key=None,
+        default_model="gpt-5.6-luna",
+        spec=find_by_name("opencode_go"),
+    )
+
+    assert provider._should_use_responses_api("gpt-5.6-luna", "medium") is True
+    assert provider._should_use_responses_api("gpt-5.6-luna", None) is True
+    assert provider._should_use_responses_api("deepseek-v4-flash", None) is False
