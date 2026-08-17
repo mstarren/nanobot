@@ -102,7 +102,7 @@ import type {
 import {
   logoFallbackUrls,
 } from "@/lib/provider-brand";
-import type { TodoItem } from "@/lib/todos";
+import type { TodoItem, TodoMilestone } from "@/lib/todos";
 import {
   isSideChannelLifecycle,
   slashCommandLifecycle,
@@ -212,6 +212,7 @@ interface ThreadComposerProps {
   goalState?: GoalStateWsPayload;
   /** Session task list (parsed ``todo`` tool state) shown under the goal. */
   todos?: TodoItem[] | null;
+  milestones?: TodoMilestone[] | null;
   workspaceScope?: WorkspaceScopePayload | null;
   workspaceControlsHidden?: boolean;
   workspaceDefaultScope?: WorkspaceScopePayload | null;
@@ -930,6 +931,7 @@ export function ThreadComposer({
   onTranscribeAudio,
   goalState,
   todos,
+  milestones,
   workspaceScope = null,
   workspaceControlsHidden = false,
   workspaceDefaultScope = null,
@@ -2336,7 +2338,7 @@ export function ThreadComposer({
           </div>
         ) : null}
         <GoalStateStrip goalState={goalState} />
-        <TodoStateStrip todos={todos} />
+        <TodoStateStrip todos={todos} milestones={milestones} />
         <div className="relative">
           {hasMentionDecorations ? (
             <ComposerCliMentionOverlay

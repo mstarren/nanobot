@@ -131,7 +131,7 @@ class TestTodoTool:
     def test_schema_exposes_todos_and_merge(self) -> None:
         schema = TodoTool().parameters
         props = schema["properties"]
-        assert set(props) == {"todos", "merge"}
+        assert set(props) == {"todos", "milestones", "merge"}
         assert props["todos"]["type"] == "array"
         item_props = props["todos"]["items"]["properties"]
         assert set(item_props) == {"id", "content", "status"}
@@ -139,6 +139,28 @@ class TestTodoTool:
             "pending", "in_progress", "completed", "cancelled",
         ]
         assert props["merge"]["type"] == "boolean"
+        assert props["milestones"]["type"] == "array"
+
+    def test_milestones_progress_sequentially_and_inject_active_only(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "prepare", "name": "Prepare", "todos": [{"id": "a", "content": "inspect", "status": "completed"}]},
+            {"id": "build", "name": "Build", "todos": [{"id": "b", "content": "implement", "status": "pending"}]},
+        ])
+        assert store.active_milestone_index() == 1
+        rendered = store.format_for_injection()
+        assert rendered is not None
+        assert "Current milestone: Build" in rendered
+        assert "implement" in rendered
+        assert "inspect" not in rendered
+
+    def test_future_in_progress_is_normalized_to_pending(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "one", "name": "One", "todos": [{"id": "a", "content": "a", "status": "pending"}]},
+            {"id": "two", "name": "Two", "todos": [{"id": "b", "content": "b", "status": "in_progress"}]},
+        ])
+        assert store.read_milestones()[1]["todos"][0]["status"] == "pending"
 
     async def test_execute_write_and_read(self) -> None:
         tool = TodoTool()

@@ -306,6 +306,8 @@ export interface ToolProgressEvent {
   approval?: ApprovalRecord;
   /** Parsed task list attached to `todo` tool completions (Hermes parity). */
   todos?: unknown;
+  /** Ordered milestone plan attached to `todo` tool completions. */
+  milestones?: unknown;
 }
 
 export interface UIFileDiff {

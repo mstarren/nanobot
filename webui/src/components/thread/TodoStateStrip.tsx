@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { useTranslation } from "react-i18next";
 
 import { floatingSurfaceElevationClassName } from "@/components/ui/floating-surface";
-import type { TodoItem } from "@/lib/todos";
+import type { TodoItem, TodoMilestone } from "@/lib/todos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
  *   once completed, and a muted slash when cancelled. Header reads
  *   "Tasks X/Y" counting non-cancelled items (Hermes parity).
  */
-export function TodoStateStrip({ todos }: { todos?: TodoItem[] | null }) {
+export function TodoStateStrip({ todos, milestones }: { todos?: TodoItem[] | null; milestones?: TodoMilestone[] | null }) {
   const { t } = useTranslation();
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const stripLabel = todoStateStripPreview(todos, t);
@@ -53,6 +53,7 @@ export function TodoStateStrip({ todos }: { todos?: TodoItem[] | null }) {
 
   const display = active ? { todos, stripLabel } : stripSnapshotRef.current;
   const displayTodos = display?.todos ?? [];
+  const activeMilestone = milestones?.find((milestone) => milestone.todos.some((todo) => todo.status === "pending" || todo.status === "in_progress"));
   const displayStripLabel = display?.stripLabel ?? null;
 
   useLayoutEffect(() => {
@@ -177,6 +178,16 @@ export function TodoStateStrip({ todos }: { todos?: TodoItem[] | null }) {
             id="nanobot-todo-panel-scroll"
             className="min-h-0 flex-1 overflow-y-auto scrollbar-thin px-3 pb-3 pt-2"
           >
+            {milestones?.length ? <ul className="flex flex-col gap-2 pb-2">
+              {milestones.map((milestone) => {
+                const active = milestone === activeMilestone;
+                const completed = milestone.todos.every((todo) => todo.status === "completed" || todo.status === "cancelled");
+                return <li key={milestone.id} data-testid="todo-milestone" className={cn("rounded-lg px-2 py-1", active && "bg-primary/10")}>
+                  <div className="flex items-center justify-between gap-2 text-[12px] font-semibold"><span>{active ? "▼" : "▶"} {milestone.name}</span><span>{milestone.todos.filter((todo) => todo.status === "completed").length}/{milestone.todos.filter((todo) => todo.status !== "cancelled").length}</span></div>
+                  {active && !completed ? <ul className="mt-1 flex flex-col gap-1">{milestone.todos.map((todo) => <li key={todo.id} data-testid="todo-item" data-todo-status={todo.status} className="flex min-w-0 items-center gap-2"><TodoGlyph status={todo.status} /><span className="min-w-0 flex-1 truncate text-[13px]" title={todo.content}>{todo.content}</span></li>)}</ul> : null}
+                </li>;
+              })}
+            </ul> : null}
             <ul className="flex flex-col gap-1.5">
               {displayTodos.map((todo) => (
                 <li

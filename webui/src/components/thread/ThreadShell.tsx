@@ -44,7 +44,7 @@ import type {
   WorkspacesPayload,
 } from "@/lib/types";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-compat";
-import { latestSessionTodos } from "@/lib/todos";
+import { latestSessionTodos, milestonesFromToolEvents } from "@/lib/todos";
 import { useClient } from "@/providers/ClientProvider";
 
 type MessageShape = Pick<UIMessage, "role" | "kind" | "content" | "isStreaming" | "turnId">;
@@ -811,6 +811,10 @@ export function ThreadShell({
     () => (messagesReady ? latestSessionTodos(displayMessages) : null),
     [messagesReady, displayMessages],
   );
+  const currentMilestones = useMemo(
+    () => (messagesReady ? milestonesFromToolEvents(displayMessages.flatMap((message) => message.toolEvents ?? [])) : null),
+    [messagesReady, displayMessages],
+  );
   const turnActive = messagesReady && (isStreaming || currentRunStartedAt !== null);
   const restoredViewportTurnId = useMemo(
     () => turnActive ? latestActiveTurnId(displayMessages) : null,
@@ -1465,6 +1469,7 @@ export function ThreadShell({
           onTranscribeAudio={transcribeAudio}
           goalState={currentGoalState}
           todos={currentTodos}
+          milestones={currentMilestones}
           workspaceScope={workspaceScope}
           workspaceControlsHidden={temporary}
           workspaceDefaultScope={workspaceDefaultScope}
@@ -1513,6 +1518,7 @@ export function ThreadShell({
           onTranscribeAudio={transcribeAudio}
           goalState={currentGoalState}
           todos={currentTodos}
+          milestones={currentMilestones}
           workspaceScope={workspaceScope}
           workspaceControlsHidden={temporary}
           workspaceDefaultScope={workspaceDefaultScope}

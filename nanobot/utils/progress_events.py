@@ -109,6 +109,7 @@ def build_tool_event_finish_payloads(context: AgentHookContext) -> list[dict[str
             todo_payload = todo_payload_from_result(result)
             if todo_payload is not None:
                 payload["todos"] = todo_payload.get("todos")
+                payload["milestones"] = todo_payload.get("milestones")
         if phase == "error":
             if isinstance(result, str) and result.strip():
                 payload["error"] = result.strip()
