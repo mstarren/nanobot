@@ -163,7 +163,7 @@ async def test_yolo_mode_auto_approves_gated_call() -> None:
     assert get_approval_gate().pending_payload() == []
     info = getattr(call, "approval_info", {})
     assert info.get("status") == "auto_approved"
-    assert "YOLO" in info.get("reason", "")
+    assert info.get("reason") == ""
     # The yolo marker lets the WebUI render the "Yolo" badge and skip the
     # assessment workflow for this record.
     assert info.get("yolo") is True
@@ -242,3 +242,49 @@ async def _wait_for_pending(gate: Any, timeout: float = 2.0) -> list[dict[str, A
             return pending
         await asyncio.sleep(0.01)
     return []
+
+
+async def test_yolo_mode_does_not_call_triage_provider() -> None:
+    bus = FakeBus()
+    configure_approval_gate(gate_tools=["exec"], timeout_seconds=5, yolo_mode=True)
+    calls = 0
+
+    class NoTriageProvider:
+        async def chat(self, *args: Any, **kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            raise AssertionError("yolo must not call the triage provider")
+
+    runtime = FakeRuntime()
+    runtime.provider = NoTriageProvider()
+    hook = ApprovalGateHook(
+        bus=bus,
+        channel="websocket",
+        chat_id="chat-1",
+        session_key="ws:chat-1",
+        runtime_getter=lambda session_key: runtime,
+    )
+    await hook.before_execute_tool(context(), tool_call(), None, {"command": "echo hi"})
+    assert calls == 0
+
+
+async def test_hardline_yolo_requires_human_even_if_triage_would_approve() -> None:
+    bus = FakeBus()
+    hook = make_hook(bus, gate_tools=[], yolo_mode=True)
+    hook._runtime_getter = lambda session_key: make_runtime("APPROVE")
+    task = asyncio.create_task(
+        hook.before_execute_tool(
+            context(),
+            tool_call(arguments={"command": "sudo rm -rf / && echo done"}),
+            None,
+            {"command": "sudo rm -rf / && echo done"},
+        )
+    )
+    pending = await _wait_for_pending(get_approval_gate())
+    assert pending
+    assert pending[0]["triage_raw"] == ""
+    assert "hardline" in pending[0]["reason"].lower()
+    ok, _ = get_approval_gate().respond(pending[0]["id"], "deny")
+    assert ok
+    with pytest.raises(ApprovalDeniedError):
+        await task

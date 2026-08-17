@@ -935,11 +935,15 @@ class SystemSettingsHandler:
         gate = get_approval_gate()
         if gate is None:
             return SettingsRouteResult.failure(503, "approval gate not configured")
-        enabled = (query_first(request.query, "enabled") or "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-        }
+        raw_enabled = query_first(request.query, "enabled")
+        if raw_enabled is None:
+            return SettingsRouteResult.failure(400, "'enabled' is required and must be boolean")
+        try:
+            from nanobot.webui.settings_contracts import parse_bool
+
+            enabled = parse_bool(raw_enabled, "enabled")
+        except WebUISettingsError as exc:
+            return SettingsRouteResult.failure(exc.status, exc.message)
         session = (query_first(request.query, "session") or "").strip()
         if len(session) > 256:
             return SettingsRouteResult.failure(400, "session key too long")
@@ -949,7 +953,6 @@ class SystemSettingsHandler:
                 "ok": True,
                 "yolo_mode": gate.yolo_mode,
                 "yolo_sessions": gate.yolo_sessions_payload(),
-                "requests": gate.pending_payload(),
             }
         )
 

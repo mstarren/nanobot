@@ -55,15 +55,18 @@ class ApprovalDeniedError(Exception):
 TRIAGE_APPROVE = "approve"
 TRIAGE_DENY = "deny"
 TRIAGE_ESCALATE = "escalate"
-
-# Hardline floor: these are never approvable, even with "all" gating.
+# Hardline floor: these commands always require an explicit human decision.
+# Patterns deliberately match a command segment, not the whole shell script;
+# the caller splits newlines and common shell control operators first.
 _HARDLINE_PATTERNS = (
-    re.compile(r"^\s*rm\s+(-[a-z]*[rRfF]+[a-z]*\s+)+/\s*(--no-preserve-root)?\s*$"),
-    re.compile(r"^\s*mkfs\b"),
-    re.compile(r"^\s*dd\s+.*of=/dev/"),
-    re.compile(r"^\s*:\(\)\s*\{\s*:\|:&\s*\}\s*;"),
-    re.compile(r"^\s*shutdown\b|^\s*poweroff\b|^\s*reboot\b"),
+    re.compile(r"^\s*rm\s+(?:-[a-z]*[rRfF][a-z]*\s+)+/(?:\*)?(?:\s|$)", re.I),
+    re.compile(r"^\s*mkfs\b", re.I),
+    re.compile(r"^\s*dd\s+.*\bof=/dev/", re.I),
+    re.compile(r"^\s*:\(\)\s*\{\s*:\|:&\s*\}", re.I),
+    re.compile(r"^\s*(?:shutdown|poweroff|reboot)\b", re.I),
 )
+_SUDO_PREFIX_RE = re.compile(r"^\s*sudo(?:\s+-[^\s]+)*\s+", re.I)
+_SHELL_SEGMENT_RE = re.compile(r"\r?\n|&&|\|\||;")
 
 _SHELL_TOOLS = {"exec", "run_command", "shell", "cmd", "execute"}
 
@@ -84,8 +87,12 @@ def _looks_hardline(tool_name: str, arguments: Any) -> bool:
     """Return True for catastrophic commands that no approval may allow."""
     if tool_name not in _SHELL_TOOLS:
         return False
-    command = _arguments_command(tool_name, arguments)
-    return any(pattern.search(command or "") for pattern in _HARDLINE_PATTERNS)
+    command = _arguments_command(tool_name, arguments) or ""
+    for segment in _SHELL_SEGMENT_RE.split(_strip_shell_comments(command)):
+        segment = _SUDO_PREFIX_RE.sub("", segment, count=1)
+        if any(pattern.search(segment) for pattern in _HARDLINE_PATTERNS):
+            return True
+    return False
 
 
 def _arguments_command(tool_name: str, arguments: Any) -> str | None:
@@ -228,10 +235,12 @@ class ApprovalGate:
         """Default yolo mode for sessions without an explicit override."""
         return self._yolo_mode
 
-    def yolo_mode_for(self, session_key: str) -> bool:
-        """Yolo state for one session: explicit override, else the default."""
-        if session_key:
-            return self._yolo_sessions.get(session_key, self._yolo_mode)
+    def yolo_mode_for(self, session_key: str, fallback_session_key: str = "") -> bool:
+        """Yolo state for one session, with a raw-key fallback for unified chats."""
+        if session_key in self._yolo_sessions:
+            return self._yolo_sessions[session_key]
+        if fallback_session_key and fallback_session_key in self._yolo_sessions:
+            return self._yolo_sessions[fallback_session_key]
         return self._yolo_mode
 
     def set_yolo_mode(self, enabled: bool, session_key: str | None = None) -> None:
@@ -244,7 +253,10 @@ class ApprovalGate:
         """
         enabled = bool(enabled)
         if session_key:
-            self._yolo_sessions[session_key] = enabled
+            if enabled == self._yolo_mode:
+                self._yolo_sessions.pop(session_key, None)
+            else:
+                self._yolo_sessions[session_key] = enabled
             logger.info(
                 "Approval gate: yolo mode {} for session={}",
                 "enabled (auto-approving gated calls)" if enabled else "disabled",
