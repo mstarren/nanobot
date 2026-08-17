@@ -27,7 +27,9 @@ from nanobot.bus.outbound_events import ProgressEvent
 from nanobot.providers.base import ToolCallRequest
 from nanobot.security.approval_gate import (
     TRIAGE_APPROVE,
+    TRIAGE_ESCALATE,
     ApprovalDeniedError,
+    _looks_hardline,
     approval_prompt_text,
     approval_ui_payload,
     get_approval_gate,
@@ -63,7 +65,7 @@ def _attach_approval_info(
     try:
         tool_call.approval_info = info
     except Exception:  # noqa: BLE001 - metadata must never break the gate
-        pass
+        logger.warning("Approval gate: failed to attach audit metadata to tool call")
 
 
 class ApprovalGateHook(AgentHook):
@@ -103,19 +105,29 @@ class ApprovalGateHook(AgentHook):
         if not gate.needs_approval(tool_call.name, arguments):
             return
 
+        hardline = _looks_hardline(tool_call.name, arguments)
         runtime = self._runtime(session_key=self._session_key)
-        if runtime is None:
+        if hardline:
+            # Hardline commands always require human review; never send them to
+            # smart triage, where an APPROVE verdict could bypass the floor.
+            verdict = TRIAGE_ESCALATE
+            reason = "hardline command requires human approval; smart triage is bypassed"
+            triage_raw = ""
+        elif runtime is None:
+            # Missing runtime fails closed to the human-review/timeout path.
             logger.warning(
-                "Approval gate: no runtime for tool={} — allowing (fail-open)",
+                "Approval gate: no runtime for tool={} — escalating to human",
                 tool_call.name,
             )
-            return
-
-        verdict, reason, triage_raw = await gate.smart_triage(
-            runtime,
-            tool_call.name,
-            arguments,
-        )
+            verdict = TRIAGE_ESCALATE
+            reason = "no triage runtime available; escalating to human"
+            triage_raw = ""
+        else:
+            verdict, reason, triage_raw = await gate.smart_triage(
+                runtime,
+                tool_call.name,
+                arguments,
+            )
         if verdict == TRIAGE_APPROVE:
             logger.info(
                 "Approval gate: smart-approved tool={} call_id={}",
