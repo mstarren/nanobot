@@ -399,3 +399,12 @@ device trusts. Browsers do not expose microphone capture to
 For detailed diagnostics, see
 [`troubleshooting.md#webui-problems`](./troubleshooting.md#webui-problems).
 For frontend development, see [`../webui/README.md`](../webui/README.md).
+
+## Agent task lists
+
+For complex work, the agent may expose an ordered task list in the composer. Flat
+lists are replaced by default; `merge: true` updates items by id and appends new
+items. Larger plans may use ordered milestones. Only the first milestone with
+pending or in-progress work is active; status updates targeting later milestones
+remain pending until earlier milestones are complete. Active task state is
+re-injected after conversation context compression.

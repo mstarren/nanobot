@@ -131,7 +131,7 @@ class TestTodoTool:
     def test_schema_exposes_todos_and_merge(self) -> None:
         schema = TodoTool().parameters
         props = schema["properties"]
-        assert set(props) == {"todos", "merge"}
+        assert set(props) == {"todos", "milestones", "merge"}
         assert props["todos"]["type"] == "array"
         item_props = props["todos"]["items"]["properties"]
         assert set(item_props) == {"id", "content", "status"}
@@ -139,6 +139,51 @@ class TestTodoTool:
             "pending", "in_progress", "completed", "cancelled",
         ]
         assert props["merge"]["type"] == "boolean"
+        assert props["milestones"]["type"] == "array"
+
+    def test_milestones_progress_sequentially_and_inject_active_only(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "prepare", "name": "Prepare", "todos": [{"id": "a", "content": "inspect", "status": "completed"}]},
+            {"id": "build", "name": "Build", "todos": [{"id": "b", "content": "implement", "status": "pending"}]},
+        ])
+        assert store.active_milestone_index() == 1
+        rendered = store.format_for_injection()
+        assert rendered is not None
+        assert "Current milestone: Build" in rendered
+        assert "implement" in rendered
+        assert "inspect" not in rendered
+
+    def test_future_in_progress_is_normalized_to_pending(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "one", "name": "One", "todos": [{"id": "a", "content": "a", "status": "pending"}]},
+            {"id": "two", "name": "Two", "todos": [{"id": "b", "content": "b", "status": "in_progress"}]},
+        ])
+        assert store.read_milestones()[1]["todos"][0]["status"] == "pending"
+
+    async def test_execute_milestones_without_legacy_todos(self) -> None:
+        tool = TodoTool()
+        written = _payload(await tool.execute(milestones=[
+            {"id": "prepare", "name": "Prepare", "todos": [
+                {"id": "inspect", "content": "Inspect", "status": "pending"},
+            ]},
+        ]))
+        assert written["active_milestone"] == "prepare"
+        assert written["milestones"][0]["name"] == "Prepare"
+        assert written["todos"][0]["id"] == "inspect"
+
+    def test_milestone_plan_is_bounded_by_total_item_cap(self) -> None:
+        store = TodoStore()
+        milestones = [
+            {"id": str(index), "todos": [
+                {"id": f"{index}-{task}", "content": "x", "status": "pending"}
+                for task in range(256)
+            ]}
+            for index in range(64)
+        ]
+        store.write([], milestones=milestones)
+        assert len(store.read()) == MAX_TODO_ITEMS
 
     async def test_execute_write_and_read(self) -> None:
         tool = TodoTool()
@@ -212,3 +257,38 @@ class TestTodoPayloadFromResult:
         assert todo_payload_from_result({"todos": []}) is not None
         assert todo_payload_from_result("nope") is None
         assert todo_payload_from_result(None) is None
+
+
+    def test_flat_merge_updates_later_milestone_without_bypassing_progression(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "first", "name": "First", "todos": [
+                {"id": "a", "content": "finish first", "status": "pending"},
+            ]},
+            {"id": "second", "name": "Second", "todos": [
+                {"id": "b", "content": "build second", "status": "pending"},
+            ]},
+        ])
+
+        merged = store.write([{"id": "b", "status": "in_progress"}], merge=True)
+
+        by_id = {item["id"]: item for item in merged}
+        assert by_id["b"]["status"] == "pending"
+        assert by_id["a"]["status"] == "pending"
+        assert store.active_milestone_index() == 0
+
+    def test_flat_write_replaces_milestone_plan_with_default_group(self) -> None:
+        store = TodoStore()
+        store.write([], milestones=[
+            {"id": "first", "name": "First", "todos": [
+                {"id": "a", "content": "first", "status": "pending"},
+            ]},
+        ])
+
+        store.write([{"id": "flat", "content": "flat plan", "status": "pending"}])
+
+        assert store.read_milestones() == [{
+            "id": "default",
+            "name": "Tasks",
+            "todos": [{"id": "flat", "content": "flat plan", "status": "pending"}],
+        }]

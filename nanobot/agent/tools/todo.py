@@ -31,6 +31,9 @@ from nanobot.agent.tools.context import current_request_session_key
 
 # Valid status values for todo items (Hermes parity).
 VALID_STATUSES = {"pending", "in_progress", "completed", "cancelled"}
+MAX_MILESTONE_NAME_CHARS = 200
+MAX_MILESTONES = 64
+MAX_TASKS_PER_MILESTONE = 256
 
 # Bounds on persisted todo state (Hermes parity). The todo list is a planning
 # aid the model re-reads after every turn, so unbounded item content or count
@@ -64,55 +67,122 @@ class TodoStore:
     """
 
     def __init__(self) -> None:
-        self._items: list[dict[str, str]] = []
+        self._milestones: list[dict[str, Any]] = []
 
-    def write(self, todos: list[dict[str, Any]], merge: bool = False) -> list[dict[str, str]]:
-        """Write todos. Returns the full current list after writing.
-
-        Args:
-            todos: list of {id, content, status} dicts
-            merge: if False, replace the entire list. If True, update
-                   existing items by id and append new ones.
-        """
+    def write(
+        self,
+        todos: list[dict[str, Any]],
+        merge: bool = False,
+        milestones: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, str]]:
+        """Replace or merge a flat plan, optionally grouped into milestones."""
+        incoming = milestones if milestones is not None else [
+            {"id": "default", "name": "Tasks", "todos": todos}
+        ]
+        normalized = self._normalize_milestones(incoming)
+        if merge and milestones is None:
+            incoming_items = normalized[0]["todos"] if normalized else []
+            existing_items = {i["id"]: i for i in self._items}
+            for item in incoming_items:
+                old = existing_items.get(item["id"])
+                if old is None:
+                    if item["id"] != "?":
+                        self._milestones[0]["todos"].append(item)
+                    continue
+                raw = next((r for r in (todos or []) if str(r.get("id", "")).strip() == item["id"]), {})
+                if raw.get("content"):
+                    old["content"] = item["content"]
+                if raw.get("status") in VALID_STATUSES:
+                    old["status"] = str(raw["status"]).strip().lower()
+            self._trim_total_items()
+            self._enforce_progression()
+            return self.read()
         if not merge:
-            # Replace mode: new list entirely
-            self._items = [self._validate(t) for t in self._dedupe_by_id(todos)]
+            self._milestones = normalized
         else:
-            # Merge mode: update existing items by id, append new ones
-            existing = {item["id"]: item for item in self._items}
-            for t in self._dedupe_by_id(todos):
-                item_id = str(t.get("id", "")).strip()
-                if not item_id:
-                    continue  # Can't merge without an id
-
-                if item_id in existing:
-                    # Update only the fields the LLM actually provided
-                    if t.get("content"):
-                        existing[item_id]["content"] = self._cap_content(str(t["content"]).strip())
-                    if t.get("status"):
-                        status = str(t["status"]).strip().lower()
-                        if status in VALID_STATUSES:
-                            existing[item_id]["status"] = status
-                else:
-                    # New item -- validate fully and append to end
-                    validated = self._validate(t)
-                    existing[validated["id"]] = validated
-                    self._items.append(validated)
-            # Rebuild _items preserving order for existing items
-            seen: set[str] = set()
-            rebuilt: list[dict[str, str]] = []
-            for item in self._items:
-                current = existing.get(item["id"], item)
-                if current["id"] not in seen:
-                    rebuilt.append(current)
-                    seen.add(current["id"])
-            self._items = rebuilt
-        # Bound total item count so a replayed/oversized list can't grow the
-        # re-injection block without limit. Keep the highest-priority head
-        # (list order is priority).
-        if len(self._items) > MAX_TODO_ITEMS:
-            self._items = self._items[:MAX_TODO_ITEMS]
+            existing = {m["id"]: m for m in self._milestones}
+            for milestone in normalized:
+                current = existing.get(milestone["id"])
+                if current is None:
+                    self._milestones.append(milestone)
+                    existing[milestone["id"]] = milestone
+                    continue
+                current["name"] = milestone["name"] or current["name"]
+                by_id = {item["id"]: item for item in current["todos"]}
+                for item in milestone["todos"]:
+                    if item["id"] in by_id:
+                        by_id[item["id"]].update(item)
+                    else:
+                        current["todos"].append(item)
+                current["todos"] = current["todos"][:MAX_TASKS_PER_MILESTONE]
+        self._trim_total_items()
+        self._enforce_progression()
         return self.read()
+
+    def _trim_total_items(self) -> None:
+        remaining = MAX_TODO_ITEMS
+        for milestone in self._milestones:
+            milestone["todos"] = milestone["todos"][:remaining]
+            remaining -= len(milestone["todos"])
+            if remaining <= 0:
+                remaining = 0
+
+    def read_milestones(self) -> list[dict[str, Any]]:
+        return [
+            {"id": m["id"], "name": m["name"], "todos": [i.copy() for i in m["todos"]]}
+            for m in self._milestones
+        ]
+
+    def active_milestone_index(self) -> int | None:
+        for index, milestone in enumerate(self._milestones):
+            if any(i["status"] in {"pending", "in_progress"} for i in milestone["todos"]):
+                return index
+        return None
+
+    def _normalize_milestones(self, milestones: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        total_items = 0
+        for position, raw in enumerate(milestones[:MAX_MILESTONES]):
+            if not isinstance(raw, dict):
+                continue
+            milestone_id = str(raw.get("id", "") or f"milestone-{position + 1}").strip()
+            if not milestone_id or milestone_id in seen:
+                continue
+            seen.add(milestone_id)
+            name = str(raw.get("name", "") or f"Milestone {position + 1}").strip()
+            tasks = raw.get("todos", raw.get("tasks", []))
+            if not isinstance(tasks, list) or total_items >= MAX_TODO_ITEMS:
+                tasks = []
+            else:
+                tasks = self._dedupe_by_id(tasks)[:MAX_TASKS_PER_MILESTONE]
+                tasks = tasks[:MAX_TODO_ITEMS - total_items]
+            normalized_tasks = [
+                self._validate(item) for item in tasks if isinstance(item, dict)
+            ]
+            total_items += len(normalized_tasks)
+            result.append({
+                "id": milestone_id,
+                "name": name[:MAX_MILESTONE_NAME_CHARS],
+                "todos": normalized_tasks,
+            })
+        return result
+
+    def _enforce_progression(self) -> None:
+        active = self.active_milestone_index()
+        found = False
+        for index, milestone in enumerate(self._milestones):
+            for item in milestone["todos"]:
+                if item["status"] != "in_progress":
+                    continue
+                if index != active or found:
+                    item["status"] = "pending"
+                else:
+                    found = True
+
+    @property
+    def _items(self) -> list[dict[str, str]]:
+        return [i for m in self._milestones for i in m["todos"]]
 
     def read(self) -> list[dict[str, str]]:
         """Return a copy of the current list."""
@@ -128,8 +198,10 @@ class TodoStore:
         Returns a human-readable string to append to the compressed message
         history, or None if the list is empty.
         """
-        if not self._items:
+        active_index = self.active_milestone_index()
+        if active_index is None:
             return None
+        milestone = self._milestones[active_index]
 
         # Status markers for compact display (Hermes parity).
         markers = {
@@ -142,13 +214,17 @@ class TodoStore:
         # Only inject pending/in_progress items — completed/cancelled ones
         # cause the model to re-do finished work after compression.
         active_items = [
-            item for item in self._items
+            item for item in milestone["todos"]
             if item["status"] in {"pending", "in_progress"}
         ]
         if not active_items:
             return None
 
-        lines = [TODO_INJECTION_HEADER]
+        lines = [
+            TODO_INJECTION_HEADER,
+            f"## Current milestone: {milestone['name']}",
+            "Do not begin work from a future milestone until the current milestone is complete.",
+        ]
         for item in active_items:
             marker = markers.get(item["status"], "[?]")
             lines.append(f"- {marker} {item['id']}. {item['content']} ({item['status']})")
@@ -239,14 +315,23 @@ def todo_store() -> TodoStore:
     return _store_for_session(current_request_session_key())
 
 
-def _todo_payload(items: list[dict[str, str]]) -> dict[str, Any]:
-    """Build the canonical tool result: full list plus summary counts."""
+def _todo_payload(items: list[dict[str, str]], milestones: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Build the canonical tool result: flat compatibility plus full plan."""
     pending = sum(1 for i in items if i["status"] == "pending")
     in_progress = sum(1 for i in items if i["status"] == "in_progress")
     completed = sum(1 for i in items if i["status"] == "completed")
     cancelled = sum(1 for i in items if i["status"] == "cancelled")
     return {
         "todos": items,
+        "milestones": milestones or [],
+        "active_milestone": next(
+            (
+                m["id"]
+                for m in milestones or []
+                if any(i["status"] in {"pending", "in_progress"} for i in m["todos"])
+            ),
+            None,
+        ),
         "summary": {
             "total": len(items),
             "pending": pending,
@@ -282,8 +367,8 @@ def todo_payload_from_result(result: Any) -> dict[str, Any] | None:
     "properties": {
         "todos": {
             "type": "array",
-            "description": "Task items to write. Omit to read current list.",
-                "items": {
+            "description": "Legacy flat task items. Use milestones for ordered plans. Omit to read current list.",
+            "items": {
                     "type": "object",
                     "properties": {
                         "id": {"type": "string", "description": "Unique item identifier"},
@@ -295,6 +380,18 @@ def todo_payload_from_result(result: Any) -> dict[str, Any] | None:
                         },
                     },
                 },
+        },
+        "milestones": {
+            "type": "array",
+            "description": "Ordered milestones. Each contains id, name, and a todos array.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "todos": {"type": "array"},
+                },
+            },
         },
         "merge": {
             "type": "boolean",
@@ -320,13 +417,15 @@ class TodoTool(Tool):
     name = "todo"
 
     description = (
-        "Manage your task list for the current session. Use for complex tasks "
+        "Manage your ordered task list and milestones for the current session. Use for complex tasks "
         "with 3+ steps or when the user provides multiple tasks. "
         "Call with no parameters to read the current list.\n\n"
         "Writing:\n"
         "- Provide 'todos' array to create/update items\n"
         "- merge=false (default): replace the entire list with a fresh plan\n"
         "- merge=true: update existing items by id, add any new ones\n\n"
+        "For larger plans, provide milestones: [{id, name, todos: [items]}]. "
+        "Only the active milestone may be worked on; complete or cancel it before the next starts.\n\n"
         "Each item: {id: string, content: string, "
         "status: pending|in_progress|completed|cancelled}\n"
         "List order is priority. Only ONE item in_progress at a time.\n"
@@ -339,6 +438,7 @@ class TodoTool(Tool):
         self,
         todos: list[dict[str, Any]] | None = None,
         merge: bool = False,
+        milestones: list[dict[str, Any]] | None = None,
     ) -> str:
         """Read or write the session's todo list.
 
@@ -351,7 +451,7 @@ class TodoTool(Tool):
         """
         store = todo_store()
 
-        if todos is not None:
+        if todos is not None or milestones is not None:
             # Guard: LLM sometimes sends todos as a JSON string instead of a list
             if isinstance(todos, str):
                 try:
@@ -360,12 +460,19 @@ class TodoTool(Tool):
                     return json.dumps({
                         "error": "todos must be a list of objects, got unparseable string"
                     }, ensure_ascii=False)
+            if todos is None:
+                todos = []
             if not isinstance(todos, list):
                 return json.dumps({
                     "error": f"todos must be a list, got {type(todos).__name__}"
                 }, ensure_ascii=False)
-            items = store.write(todos, merge)
+            items = store.write(todos, merge, milestones=milestones)
         else:
             items = store.read()
 
-        return json.dumps(_todo_payload(items), ensure_ascii=False)
+        return json.dumps(_todo_payload(items, store.read_milestones()), ensure_ascii=False)
+
+
+def todo_injection_for_session(session_key: str | None) -> str | None:
+    """Return the active task block for context-compression reinjection."""
+    return _store_for_session(session_key).format_for_injection()
