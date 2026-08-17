@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 export function TodoStateStrip({ todos, milestones }: { todos?: TodoItem[] | null; milestones?: TodoMilestone[] | null }) {
   const { t } = useTranslation();
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
+  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set());
   const stripLabel = todoStateStripPreview(todos, t);
   const active = !!stripLabel;
   const [, setTick] = useState(0);
@@ -181,14 +182,16 @@ export function TodoStateStrip({ todos, milestones }: { todos?: TodoItem[] | nul
             {milestones?.length ? <ul className="flex flex-col gap-2 pb-2">
               {milestones.map((milestone) => {
                 const active = milestone === activeMilestone;
-                const completed = milestone.todos.every((todo) => todo.status === "completed" || todo.status === "cancelled");
+                const expanded = active || expandedMilestones.has(milestone.id);
                 return <li key={milestone.id} data-testid="todo-milestone" className={cn("rounded-lg px-2 py-1", active && "bg-primary/10")}>
-                  <div className="flex items-center justify-between gap-2 text-[12px] font-semibold"><span>{active ? "▼" : "▶"} {milestone.name}</span><span>{milestone.todos.filter((todo) => todo.status === "completed").length}/{milestone.todos.filter((todo) => todo.status !== "cancelled").length}</span></div>
-                  {active && !completed ? <ul className="mt-1 flex flex-col gap-1">{milestone.todos.map((todo) => <li key={todo.id} data-testid="todo-item" data-todo-status={todo.status} className="flex min-w-0 items-center gap-2"><TodoGlyph status={todo.status} /><span className="min-w-0 flex-1 truncate text-[13px]" title={todo.content}>{todo.content}</span></li>)}</ul> : null}
+                  <button type="button" className="flex w-full items-center justify-between gap-2 text-left text-[12px] font-semibold" onClick={() => setExpandedMilestones((current) => { const next = new Set(current); if (next.has(milestone.id)) next.delete(milestone.id); else next.add(milestone.id); return next; })}>
+                    <span>{expanded ? "▼" : "▶"} {milestone.name}</span><span>{milestone.todos.filter((todo) => todo.status === "completed").length}/{milestone.todos.filter((todo) => todo.status !== "cancelled").length}</span>
+                  </button>
+                  {expanded ? <ul className="mt-1 flex flex-col gap-1">{milestone.todos.map((todo) => <li key={todo.id} data-testid="todo-item" data-todo-status={todo.status} className="flex min-w-0 items-center gap-2"><TodoGlyph status={todo.status} /><span className="min-w-0 flex-1 truncate text-[13px]" title={todo.content}>{todo.content}</span></li>)}</ul> : null}
                 </li>;
               })}
             </ul> : null}
-            <ul className="flex flex-col gap-1.5">
+            {!milestones?.length ? <ul className="flex flex-col gap-1.5">
               {displayTodos.map((todo) => (
                 <li
                   key={todo.id}
@@ -210,7 +213,7 @@ export function TodoStateStrip({ todos, milestones }: { todos?: TodoItem[] | nul
                   </span>
                 </li>
               ))}
-            </ul>
+            </ul> : null}
           </div>
         </div>
       ) : null}
