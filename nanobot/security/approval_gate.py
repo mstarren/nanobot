@@ -55,23 +55,37 @@ TRIAGE_ESCALATE = "escalate"
 
 # Hardline floor: these are never approvable, even with "all" gating.
 _HARDLINE_PATTERNS = (
-    re.compile(r"^\s*rm\s+(-[a-z]*[rRfF]+[a-z]*\s+)+/\s*(--no-preserve-root)?\s*$"),
-    re.compile(r"^\s*mkfs\b"),
-    re.compile(r"^\s*dd\s+.*of=/dev/"),
-    re.compile(r"^\s*:\(\)\s*\{\s*:\|:&\s*\}\s*;"),
-    re.compile(r"^\s*shutdown\b|^\s*poweroff\b|^\s*reboot\b"),
+    re.compile(
+        r"\brm\s+(?:-[a-z]*[rRfF][a-z]*\s+)+/"
+        r"(?:\*|\s|$|/|--no-preserve-root)"
+    ),
+    re.compile(r"\bmkfs\b"),
+    re.compile(r"\bdd\s+.*\bof\s*=\s*/dev/"),
+    re.compile(r":\(\)\s*\{\s*:\|:&\s*\}\s*;?"),
+    re.compile(r"\b(?:shutdown|poweroff|reboot)\b"),
 )
 
 _SHELL_TOOLS = {"exec", "run_command", "shell", "cmd", "execute"}
+_SHELL_PREFIX_RE = re.compile(
+    r"^\s*(?:(?:sudo|env)\s+)*(?:(?:/usr/bin/|/bin/)?"
+    r"(?:bash|sh|zsh|fish)\s+-c\s+)?",
+    re.I,
+)
 
 _SECRET_KEY_RE = re.compile(
     r"(token|secret|password|api[_-]?key|authorization|credential)", re.I
 )
+_SECRET_VALUE = r"(?:\"[^\"]*\"|'[^']*'|[^\s;&|]+)"
 _SECRET_ASSIGNMENT_RE = re.compile(
-    r"(?i)(\b(?:token|secret|password|api[_-]?key|authorization|credential)\b\s*=\s*)[^\s;&|]+"
+    rf"(?i)(\b(?:token|secret|password|api[_-]?key|authorization|credential)\b\s*[:=]\s*){_SECRET_VALUE}"
 )
 _SECRET_FLAG_RE = re.compile(
-    r"(?i)(--?(?:token|secret|password|api[_-]?key|authorization|credential)\s+)[^\s;&|]+"
+    rf"(?i)(--?(?:token|secret|password|api[_-]?key|authorization|credential)\s+){_SECRET_VALUE}"
+)
+_BEARER_RE = re.compile(r"(?i)(\bbearer\s+)[^\s;&|\"']+")
+_BASIC_AUTH_RE = re.compile(
+    r"(?i)(\b(?:curl|wget)\b[^\n]*\s-u\s+)"
+    r"(?:\"[^\"]*\"|'[^']*'|[^\s;&|]+)"
 )
 _COMMENT_STRIP_RE = re.compile(r"\s+#.*$")
 
@@ -88,8 +102,10 @@ def _redact_sensitive(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(_redact_sensitive(item) for item in value)
     if isinstance(value, str):
+        value = _BEARER_RE.sub(r"\1[REDACTED]", value)
         value = _SECRET_ASSIGNMENT_RE.sub(r"\1[REDACTED]", value)
-        return _SECRET_FLAG_RE.sub(r"\1[REDACTED]", value)
+        value = _SECRET_FLAG_RE.sub(r"\1[REDACTED]", value)
+        return _BASIC_AUTH_RE.sub(r"\1[REDACTED]", value)
     return value
 
 
@@ -102,11 +118,18 @@ def _strip_shell_comments(command: str) -> str:
 
 
 def _looks_hardline(tool_name: str, arguments: Any) -> bool:
-    """Return True for catastrophic commands that no approval may allow."""
+    """Return True for catastrophic commands that always require a human."""
     if tool_name not in _SHELL_TOOLS:
         return False
-    command = _arguments_command(tool_name, arguments)
-    return any(pattern.search(command or "") for pattern in _HARDLINE_PATTERNS)
+    command = _arguments_command(tool_name, arguments) or ""
+    # Inspect every shell segment so chaining, pipelines, comments, and
+    # multiline payloads cannot hide a destructive command from the floor.
+    for segment in re.split(r"[\n;&|]+", command):
+        normalized = _SHELL_PREFIX_RE.sub("", segment.strip())
+        normalized = normalized.replace("'", "").replace('"', "")
+        if any(pattern.search(normalized) for pattern in _HARDLINE_PATTERNS):
+            return True
+    return False
 
 
 def _arguments_command(tool_name: str, arguments: Any) -> str | None:
@@ -353,7 +376,7 @@ class ApprovalGate:
         provider = getattr(runtime, "provider", None)
         model = self._triage_model_name(runtime)
         if provider is None or not model:
-            loguru_logger.warning(
+            logger.warning(
                 "Smart triage: no provider/model available (provider={} model={!r}); escalating to human",
                 provider is not None,
                 model,
@@ -364,7 +387,7 @@ class ApprovalGate:
                 "",
             )
 
-        command = _tool_arguments_text(tool_name, _redact_sensitive(arguments))
+        command = _tool_arguments_text(tool_name, arguments)
         if tool_name in _SHELL_TOOLS:
             command = _strip_shell_comments(command)
 
@@ -428,7 +451,7 @@ class ApprovalGate:
             )
             raw = (response.content or "").strip()
         except Exception as exc:  # noqa: BLE001 - fail-closed to human
-            loguru_logger.warning("Smart triage LLM call failed: {}", exc)
+            logger.warning("Smart triage LLM call failed: {}", exc)
             return (
                 TRIAGE_ESCALATE,
                 "Smart triage could not assess this call (escalating to you).",
@@ -451,7 +474,7 @@ class ApprovalGate:
             reason = detail or "Smart triage assessed this call as genuinely dangerous."
         else:
             reason = detail or "Smart triage was uncertain about this call."
-        loguru_logger.info(
+        logger.info(
             "Smart triage: tool={} verdict={} raw={!r}",
             tool_name,
             verdict,

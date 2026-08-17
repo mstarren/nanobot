@@ -185,6 +185,21 @@ async def test_missing_runtime_escalates_to_human() -> None:
         await task
 
 
+async def test_hook_factory_returns_hook_when_gate_is_configured() -> None:
+    bus = FakeBus()
+    make_hook(bus)
+    from nanobot.agent.hook import AgentTurnHookContext
+    from nanobot.agent.hooks.approval_gate import create_approval_gate_hook
+
+    hook = create_approval_gate_hook(
+        AgentTurnHookContext(channel="websocket", chat_id="c", session_key="s"),
+        bus=bus,
+        runtime_getter=lambda session_key: None,
+    )
+    assert hook is not None
+    reset_approval_gate()
+
+
 async def test_hook_factory_is_noop_when_gate_not_configured() -> None:
     reset_approval_gate()
     from nanobot.agent.hook import AgentTurnHookContext

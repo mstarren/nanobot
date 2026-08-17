@@ -65,7 +65,9 @@ def _attach_approval_info(
     try:
         tool_call.approval_info = info
     except Exception:  # noqa: BLE001 - metadata must never break the gate
-        logger.warning("Approval gate: failed to attach audit metadata to tool call")
+        logger.opt(exception=True).warning(
+            "Approval gate: failed to attach audit metadata to tool call"
+        )
 
 
 class ApprovalGateHook(AgentHook):

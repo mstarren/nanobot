@@ -73,8 +73,9 @@ response, the approval status, and the tool result.
 ## Known limitations (POC)
 
 - Pending requests live in gateway process memory; a restart drops them.
-- The hardline patterns are anchored shell commands (for example `rm -rf /`),
-  not a general sandbox — treat them as defense-in-depth, not a boundary.
+- The hardline floor recognizes destructive commands across shell segments,
+  common wrappers, chaining, comments, and multiline payloads; it is still not
+  a general sandbox — treat it as defense-in-depth, not a security boundary.
 - The WebUI popup surfaces one request at a time (queue count is shown when
   several are pending).
 

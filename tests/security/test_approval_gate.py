@@ -56,14 +56,35 @@ def test_sensitive_arguments_are_redacted_for_review_surfaces() -> None:
     arguments = {
         "api_token": "top-secret",
         "nested": {"password": "hunter2"},
-        "command": "TOKEN=inline-secret curl --api-key cli-secret example.test",
+        "command": (
+            "TOKEN=inline-secret PASSWORD=\"my secret words\" "
+            "curl --api-key cli-secret -H 'Authorization: Bearer sk-live-123' "
+            "-u user:pass example.test"
+        ),
     }
     redacted = _redact_sensitive(arguments)
     assert redacted["api_token"] == "[REDACTED]"
     assert redacted["nested"]["password"] == "[REDACTED]"
     assert "top-secret" not in str(redacted)
     assert "inline-secret" not in redacted["command"]
+    assert "my secret words" not in redacted["command"]
     assert "cli-secret" not in redacted["command"]
+    assert "sk-live-123" not in redacted["command"]
+    assert "user:pass" not in redacted["command"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm -rf / # cleanup",
+        "echo ok && sudo rm -rf /*",
+        "printf 'ok\\n'\nrm -rf /",
+        "bash -c 'rm -rf /'",
+        "rm -rf /; echo done",
+    ],
+)
+def test_hardline_floor_handles_wrappers_and_chaining(command: str) -> None:
+    assert _looks_hardline("exec", {"command": command}) is True
 
 
 def test_gate_all_gates_every_tool() -> None:
