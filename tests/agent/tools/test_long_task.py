@@ -19,7 +19,7 @@ from nanobot.agent.tools.long_task import (
     UpdateGoalTool,
 )
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.bus.outbound_events import GoalStateSyncEvent
+from nanobot.bus.outbound_events import GoalStateSyncEvent, SessionUpdatedEvent
 from nanobot.bus.queue import MessageBus
 from nanobot.bus.runtime_events import RuntimeEventBus
 from nanobot.session.goal_state import GOAL_STATE_KEY, MAX_GOAL_OBJECTIVE_CHARS
@@ -377,6 +377,114 @@ async def test_registry_does_not_reuse_goal_context_after_request_scope(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_create_goal_renames_session_to_summary(tmp_path):
+    sm = SessionManager(tmp_path)
+    create, _update, ctx = _tools(sm)
+    sess = sm.get_or_create("websocket:c1")
+    sess.metadata["title"] = "Old auto title"
+    sm.save(sess)
+
+    out = await _execute(
+        create,
+        ctx,
+        objective="Do the thing",
+        ui_summary="Summarised goal",
+    )
+    assert "Goal recorded" in out
+
+    assert sess.metadata["title"] == "Summarised goal"
+    persisted = SessionManager(tmp_path).get_or_create("websocket:c1")
+    assert persisted.metadata["title"] == "Summarised goal"
+    assert persisted.metadata[GOAL_STATE_KEY]["ui_summary"] == "Summarised goal"
+
+
+@pytest.mark.asyncio
+async def test_create_goal_without_summary_keeps_existing_title(tmp_path):
+    sm = SessionManager(tmp_path)
+    create, _update, ctx = _tools(sm)
+    sess = sm.get_or_create("websocket:c1")
+    sess.metadata["title"] = "Existing title"
+    sm.save(sess)
+
+    await _execute(create, ctx, objective="Do the thing")
+
+    sess = sm.get_or_create("websocket:c1")
+    assert sess.metadata["title"] == "Existing title"
+    persisted = SessionManager(tmp_path).get_or_create("websocket:c1")
+    assert persisted.metadata["title"] == "Existing title"
+    assert GOAL_STATE_KEY in persisted.metadata
+
+
+@pytest.mark.asyncio
+async def test_create_goal_respects_user_edited_title(tmp_path):
+    sm = SessionManager(tmp_path)
+    create, _update, ctx = _tools(sm)
+    sess = sm.get_or_create("websocket:c1")
+    sess.metadata["title"] = "My manual name"
+    sess.metadata["title_user_edited"] = True
+    sm.save(sess)
+
+    await _execute(create, ctx, objective="Do the thing", ui_summary="Summarised goal")
+
+    sess = sm.get_or_create("websocket:c1")
+    assert sess.metadata["title"] == "My manual name"
+    assert sess.metadata[GOAL_STATE_KEY]["ui_summary"] == "Summarised goal"
+
+
+@pytest.mark.asyncio
+async def test_update_goal_replace_renames_session_to_new_summary(tmp_path):
+    sm = SessionManager(tmp_path)
+    create, update, ctx = _tools(sm)
+    await _execute(create, ctx, objective="Old", ui_summary="Old summary")
+
+    out = await _execute(
+        update,
+        _request_context(),
+        action="replace",
+        objective="New",
+        ui_summary="New summary",
+    )
+    assert "Goal replaced" in out
+
+    sess = sm.get_or_create("websocket:c1")
+    assert sess.metadata["title"] == "New summary"
+    persisted = SessionManager(tmp_path).get_or_create("websocket:c1")
+    assert persisted.metadata["title"] == "New summary"
+    assert persisted.metadata[GOAL_STATE_KEY]["objective"] == "New"
+
+
+@pytest.mark.asyncio
+async def test_goal_summary_title_is_truncated_to_title_limit(tmp_path):
+    sm = SessionManager(tmp_path)
+    create, _update, ctx = _tools(sm)
+    long_summary = "s" * 200
+
+    await _execute(create, ctx, objective="Do the thing", ui_summary=long_summary)
+
+    title = sm.get_or_create("websocket:c1").metadata["title"]
+    assert len(title) == 60
+    assert title.endswith("…")
+
+
+@pytest.mark.asyncio
+async def test_goal_summary_title_rolls_back_on_save_failure(tmp_path, monkeypatch):
+    sm = SessionManager(tmp_path)
+    create, _update, ctx = _tools(sm)
+    sess = sm.get_or_create("websocket:c1")
+
+    def fail_save(_session, **_kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(sm, "save", fail_save)
+    with pytest.raises(OSError, match="disk unavailable"):
+        await _execute(create, ctx, objective="Old", ui_summary="Summarised goal")
+
+    assert "title" not in sess.metadata
+    assert "title" not in SessionManager(tmp_path).get_or_create("websocket:c1").metadata
+    assert GOAL_STATE_KEY not in sess.metadata
+
+
+@pytest.mark.asyncio
 async def test_goal_state_events_publish_active_then_inactive(tmp_path):
     bus = MagicMock()
     bus.publish_outbound = AsyncMock()
@@ -397,16 +505,22 @@ async def test_goal_state_events_publish_active_then_inactive(tmp_path):
         ui_summary="alpha",
     )
 
-    bus.publish_outbound.assert_awaited_once()
-    call = bus.publish_outbound.await_args.args[0]
-    assert call.channel == "websocket"
-    assert call.chat_id == "chat-99"
-    assert isinstance(call.event, GoalStateSyncEvent)
-    assert call.event.goal_state == {
+    bus.publish_outbound.assert_awaited()
+    calls = bus.publish_outbound.await_args_list
+    assert len(calls) == 2
+    first = calls[0].args[0]
+    assert first.channel == "websocket"
+    assert first.chat_id == "chat-99"
+    assert isinstance(first.event, GoalStateSyncEvent)
+    assert first.event.goal_state == {
         "active": True,
         "ui_summary": "alpha",
         "objective": "Objective alpha",
     }
+    second = calls[1].args[0]
+    assert isinstance(second.event, SessionUpdatedEvent)
+    assert second.event.scope == "metadata"
+    assert second.chat_id == "chat-99"
 
     bus.publish_outbound.reset_mock()
     await _execute(

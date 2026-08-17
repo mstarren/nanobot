@@ -20,6 +20,7 @@ from nanobot.runtime_context import RuntimeContextBlock, wrap_runtime_context_li
 from nanobot.session.goal_state import (
     GOAL_STATE_KEY,
     MAX_GOAL_OBJECTIVE_CHARS,
+    apply_goal_summary_title,
     discard_legacy_goal_state_key,
     explicit_goal_requested,
     goal_state_raw,
@@ -78,10 +79,15 @@ class _GoalToolsMixin:
         blob: dict[str, Any],
         *,
         reset_continuation: bool = False,
+        summary_title: str | None = None,
     ) -> None:
         previous_metadata = deepcopy(sess.metadata)
         sess.metadata[GOAL_STATE_KEY] = blob
         discard_legacy_goal_state_key(sess.metadata)
+        if summary_title is not None:
+            # Rename the session to the goal's summary line inside the same
+            # mutation window so a failed save rolls both back together.
+            apply_goal_summary_title(sess.metadata, summary_title)
         if reset_continuation:
             reset_goal_continuation_rounds(sess.metadata)
         try:
@@ -225,7 +231,7 @@ class CreateGoalTool(Tool, _GoalToolsMixin):
             "ui_summary": summary,
             "started_at": _iso_now(),
         }
-        self._save_goal_state(sess, blob, reset_continuation=True)
+        self._save_goal_state(sess, blob, reset_continuation=True, summary_title=summary)
         await self._publish_goal_state_changed(sess.metadata)
         extra = f"\nSummary line: {summary}" if summary else ""
         return (
@@ -340,7 +346,7 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
                 "previous_objective": str(prior.get("objective") or ""),
                 "recap": (recap or "").strip(),
             }
-            self._save_goal_state(sess, blob, reset_continuation=True)
+            self._save_goal_state(sess, blob, reset_continuation=True, summary_title=summary)
             await self._publish_goal_state_changed(sess.metadata)
             extra = f"\nSummary line: {summary}" if summary else ""
             return "Goal replaced. Continue toward the new objective using ordinary tools." + extra
