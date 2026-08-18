@@ -1532,5 +1532,16 @@
       "usePath": "경로 사용",
       "absolutePathRequired": "이 머신의 절대 폴더 경로를 입력하세요."
     }
+  },
+  "subagent": {
+    "running": "Subagents ({{count}})",
+    "running_one": "Subagent ({{count}})",
+    "running_other": "Subagents ({{count}})",
+    "phase": "{{phase}}",
+    "iteration": "iter {{count}}",
+    "iteration_one": "iter {{count}}",
+    "iteration_other": "iter {{count}}",
+    "stop": "Stop",
+    "stop_title": "Cancel this subagent"
   }
 }

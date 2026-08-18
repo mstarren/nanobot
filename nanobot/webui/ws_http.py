@@ -321,6 +321,7 @@ class GatewayHTTPHandler:
         mcp_reload: Callable[[], Awaitable[dict[str, Any]]] | None = None,
         skill_state_action: Callable[[set[str]], None] | None = None,
         log: Any = logger,
+        subagent_manager: Callable[[], Any | None] | None = None,
     ) -> None:
         self.config = config
         self.session_manager = session_manager
@@ -345,6 +346,7 @@ class GatewayHTTPHandler:
         self.local_trigger_pending_ids = local_trigger_pending_ids
         self._log = log
         self._runtime_surface = runtime_surface
+        self._subagent_manager = subagent_manager
 
         from nanobot.webui.settings_api import runtime_capabilities as _rc
         from nanobot.webui.settings_routes import WebUISettingsRouter
@@ -449,6 +451,8 @@ class GatewayHTTPHandler:
             return True
         if re.match(r"^/api/sessions/[^/]+/delete$", path):
             return True
+        if re.match(r"^/api/subagents/[^/]+/stop$", path):
+            return True
         if re.match(r"^/api/webui/automations/(enable|disable|delete|run|update)$", path):
             return True
         return path in {
@@ -472,6 +476,13 @@ class GatewayHTTPHandler:
             if not isinstance(key, str) or not key.strip():
                 return _http_error(400, "missing session key")
             return f"/api/sessions/{quote(key, safe='')}/delete"
+        if action == "subagent.stop":
+            task_id = payload.get("task_id")
+            if not isinstance(task_id, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{1,64}", task_id
+            ):
+                return _http_error(400, "invalid subagent task id")
+            return f"/api/subagents/{quote(task_id, safe='')}/stop"
         connect_action = _WEBUI_CHANNEL_CONNECT_ACTIONS.get(action)
         if connect_action is not None:
             channel = payload.get("channel")
@@ -1101,7 +1112,99 @@ class GatewayHTTPHandler:
             return self._handle_webui_sidebar_state(request)
         if got == "/api/webui/sidebar-state/update":
             return self._handle_webui_sidebar_state_update(request)
+        if got == "/api/subagents":
+            return self._handle_subagents_list(request)
+        m = re.match(r"^/api/subagents/([A-Za-z0-9_-]+)/stop$", got)
+        if m:
+            return await self._handle_subagent_stop(request, m.group(1))
+        m = re.match(r"^/api/subagents/([A-Za-z0-9_-]+)$", got)
+        if m:
+            return self._handle_subagent_detail(request, m.group(1))
         return None
+
+    # -- Subagent routes -----------------------------------------------------
+
+    def _subagent_manager(self) -> Any | None:
+        if self._subagent_manager is None:
+            return None
+        try:
+            return self._subagent_manager()
+        except Exception:
+            self._log.exception("subagent manager lookup failed")
+            return None
+
+    @staticmethod
+    def _subagent_summary(record_or_status: Any, *, running: bool) -> dict[str, Any]:
+        return {
+            "task_id": record_or_status.get("task_id"),
+            "label": record_or_status.get("label"),
+            "phase": record_or_status.get("phase"),
+            "iteration": record_or_status.get("iteration", 0),
+            "running": running,
+            "started_wall_ms": record_or_status.get("started_wall_ms"),
+            "stop_reason": record_or_status.get("stop_reason"),
+            "error": record_or_status.get("error"),
+        }
+
+    def _handle_subagents_list(self, request: WsRequest) -> Response:
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        manager = self._subagent_manager()
+        if manager is None:
+            return _http_json_response({"subagents": [], "available": False})
+        running_ids = set(manager.runtime_statuses().keys())
+        items: list[dict[str, Any]] = []
+        for record in manager.task_records().values():
+            items.append(self._subagent_summary(record, running=record.get("task_id") in running_ids))
+        for status in manager.runtime_statuses().values():
+            if status.task_id in {item.get("task_id") for item in items}:
+                continue
+            items.append(self._subagent_summary(self._subagent_ui_data(status), running=True))
+        items.sort(key=lambda item: item.get("started_wall_ms") or 0, reverse=True)
+        return _http_json_response({"subagents": items, "available": True})
+
+    def _handle_subagent_detail(self, request: WsRequest, task_id: str) -> Response:
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        manager = self._subagent_manager()
+        if manager is None:
+            return _http_error(404, "subagent manager unavailable")
+        status = manager.runtime_statuses().get(task_id)
+        record = manager.task_records().get(task_id)
+        if status is None and record is None:
+            return _http_error(404, "subagent task not found")
+        payload: dict[str, Any] = {}
+        if status is not None:
+            payload.update(self._subagent_ui_data(status))
+            payload["running"] = True
+        if record is not None:
+            payload.setdefault("running", False)
+            for key, value in record.items():
+                payload.setdefault(key, value)
+        return _http_json_response(payload)
+
+    @staticmethod
+    def _subagent_ui_data(status: Any) -> dict[str, Any]:
+        return {
+            "task_id": status.task_id,
+            "label": status.label,
+            "phase": status.phase,
+            "iteration": status.iteration,
+            "tool_events": list(status.tool_events),
+            "usage": dict(status.usage),
+            "stop_reason": status.stop_reason,
+            "error": status.error,
+            "started_wall_ms": status.started_wall_ms,
+        }
+
+    async def _handle_subagent_stop(self, request: WsRequest, task_id: str) -> Response:
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        manager = self._subagent_manager()
+        if manager is None:
+            return _http_error(404, "subagent manager unavailable")
+        cancelled = manager.cancel_task(task_id)
+        return _http_json_response({"ok": True, "cancelled": cancelled, "task_id": task_id})
 
     def _handle_commands(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):

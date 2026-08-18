@@ -1532,5 +1532,16 @@
       "usePath": "使用路徑",
       "absolutePathRequired": "請輸入這台機器上的絕對資料夾路徑。"
     }
+  },
+  "subagent": {
+    "running": "Subagents ({{count}})",
+    "running_one": "Subagent ({{count}})",
+    "running_other": "Subagents ({{count}})",
+    "phase": "{{phase}}",
+    "iteration": "iter {{count}}",
+    "iteration_one": "iter {{count}}",
+    "iteration_other": "iter {{count}}",
+    "stop": "Stop",
+    "stop_title": "Cancel this subagent"
   }
 }

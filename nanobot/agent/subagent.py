@@ -12,7 +12,7 @@ from typing import Any, Callable, TypedDict
 
 from loguru import logger
 
-from nanobot.agent.hook import AgentHook, AgentHookContext
+from nanobot.agent.hook import AgentHook, AgentHookContext, CompositeHook
 from nanobot.agent.runner import AgentRunner, AgentRunResult, AgentRunSpec
 from nanobot.agent.tools.base import ToolResult
 from nanobot.agent.tools.context import (
@@ -25,7 +25,8 @@ from nanobot.agent.tools.exec_session import ExecSessionManager
 from nanobot.agent.tools.file_state import FileStates
 from nanobot.agent.tools.loader import ToolLoader
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.bus.events import InboundMessage
+from nanobot.bus.events import OUTBOUND_META_AGENT_UI, InboundMessage, OutboundMessage
+from nanobot.bus.outbound_events import ProgressEvent
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import AgentDefaults, ToolsConfig
 from nanobot.providers.base import LLMProvider
@@ -53,7 +54,8 @@ class SubagentStatus:
     label: str
     task_description: str
     started_at: float          # time.monotonic()
-    phase: str = "initializing"  # initializing | awaiting_tools | tools_completed | final_response | done | error
+    started_wall_ms: float = 0.0  # time.time()*1000 — wall-clock start for UI display
+    phase: str = "initializing"  # initializing | awaiting_tools | tools_completed | final_response | done | error | cancelled
     iteration: int = 0
     tool_events: list[dict[str, str]] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=dict)
@@ -62,12 +64,23 @@ class SubagentStatus:
 
 
 class _SubagentHook(AgentHook):
-    """Hook for subagent execution — logs tool calls and updates status."""
+    """Hook for subagent execution — logs tool calls and updates status.
 
-    def __init__(self, task_id: str, status: SubagentStatus | None = None) -> None:
+    ``on_progress`` is an optional coroutine called after every iteration with
+    the live :class:`SubagentStatus` so the owning manager can publish live
+    progress frames to the parent session (WebUI subagent cards).
+    """
+
+    def __init__(
+        self,
+        task_id: str,
+        status: SubagentStatus | None = None,
+        on_progress: Callable[[SubagentStatus], Awaitable[None]] | None = None,
+    ) -> None:
         super().__init__()
         self._task_id = task_id
         self._status = status
+        self._on_progress = on_progress
 
     async def before_execute_tools(self, context: AgentHookContext) -> None:
         for tool_call in context.tool_calls:
@@ -85,6 +98,11 @@ class _SubagentHook(AgentHook):
         self._status.usage = dict(context.usage)
         if context.error:
             self._status.error = str(context.error)
+        if self._on_progress is not None:
+            try:
+                await self._on_progress(self._status)
+            except Exception:  # noqa: BLE001 - progress publishing must not break the run
+                logger.exception("Subagent [{}] progress publish failed", self._task_id)
 
 
 class SubagentManager:
@@ -157,10 +175,145 @@ class SubagentManager:
         self._running_tasks: dict[str, asyncio.Task[str]] = {}
         self._task_statuses: dict[str, SubagentStatus] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
+        # Durable-in-memory records of every run (kept after statuses are
+        # cleaned up) so the WebUI can fetch task transcripts/results.
+        self._task_records: dict[str, dict[str, Any]] = {}
+        self._max_task_records = 500
 
     def runtime_statuses(self) -> Mapping[str, SubagentStatus]:
         """Return the observable task statuses used by runtime-control snapshots."""
         return self._task_statuses
+
+    # -- WebUI-facing task records and control ---------------------------------
+
+    @staticmethod
+    def _subagent_ui_payload(status: SubagentStatus) -> dict[str, Any]:
+        """Structured ``agent_ui`` blob for the WebUI subagent card."""
+        return {
+            "kind": "subagent",
+            "data": {
+                "task_id": status.task_id,
+                "label": status.label,
+                "phase": status.phase,
+                "iteration": status.iteration,
+                "tool_events": list(status.tool_events),
+                "usage": dict(status.usage),
+                "stop_reason": status.stop_reason,
+                "error": status.error,
+                "started_wall_ms": status.started_wall_ms,
+            },
+        }
+
+    def _build_run_hook(
+        self,
+        task_id: str,
+        status: SubagentStatus,
+        origin: _SubagentOrigin,
+        runtime: LLMRuntime,
+        *,
+        on_progress: Callable[[SubagentStatus], Awaitable[None]] | None = None,
+    ) -> AgentHook:
+        """Compose the subagent's run hook, optionally with the approval gate.
+
+        Gated tool calls made by subagents surface in the parent session and
+        resolve through the existing ``/api/approval/respond`` path.
+        """
+        subagent_hook = _SubagentHook(task_id, status, on_progress=on_progress)
+        approval_hook = None
+        try:
+            from nanobot.agent.hooks.approval_gate import ApprovalGateHook
+            from nanobot.security.approval_gate import get_approval_gate
+
+            if get_approval_gate() is not None:
+                approval_hook = ApprovalGateHook(
+                    bus=self.bus,
+                    channel=origin["channel"],
+                    chat_id=origin["chat_id"],
+                    session_key=origin.get("session_key")
+                    or f"{origin['channel']}:{origin['chat_id']}",
+                    runtime_getter=lambda: runtime,
+                )
+        except Exception:  # noqa: BLE001 - approval wiring must never break spawn
+            logger.exception("Subagent [{}] approval gate wiring failed", task_id)
+        if approval_hook is None:
+            return subagent_hook
+        return CompositeHook([subagent_hook, approval_hook])
+
+    async def _publish_progress(self, origin: _SubagentOrigin, status: SubagentStatus) -> None:
+        """Publish a live progress frame for a subagent into its parent session."""
+        if self.bus is None:
+            return
+        if origin.get("chat_id") in (None, "", "direct"):
+            return  # No routable chat surface (e.g. CLI-originated runs).
+        text = f"Subagent [{status.label}] {status.phase}"
+        if status.iteration:
+            text += f" (iteration {status.iteration})"
+        if status.error:
+            text += f" — error: {status.error}"
+        try:
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel=origin["channel"],
+                    chat_id=origin["chat_id"],
+                    content=text,
+                    metadata={OUTBOUND_META_AGENT_UI: self._subagent_ui_payload(status)},
+                    event=ProgressEvent(
+                        content=text,
+                        tool_events=list(status.tool_events),
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001 - progress publishing must never break the run
+            logger.exception("Subagent [{}] progress publish failed", status.task_id)
+
+    def _store_record(
+        self,
+        task_id: str,
+        *,
+        origin: _SubagentOrigin,
+        label: str,
+        task: str,
+        status: SubagentStatus,
+        final_result: str | None = None,
+        final_status: str | None = None,
+    ) -> None:
+        """Keep a bounded in-memory record of a run for the WebUI detail API."""
+        record: dict[str, Any] = {
+            "task_id": task_id,
+            "label": label,
+            "task": task,
+            "channel": origin.get("channel"),
+            "chat_id": origin.get("chat_id"),
+            "session_key": origin.get("session_key"),
+            "phase": status.phase,
+            "iteration": status.iteration,
+            "tool_events": list(status.tool_events),
+            "usage": dict(status.usage),
+            "stop_reason": status.stop_reason,
+            "error": status.error,
+            "started_wall_ms": status.started_wall_ms,
+            "finished_wall_ms": time.time() * 1000,
+            "final_result": final_result,
+            "final_status": final_status,
+        }
+        self._task_records[task_id] = record
+        if len(self._task_records) > self._max_task_records:
+            # Drop the oldest records, keeping insertion order stable.
+            overflow = len(self._task_records) - self._max_task_records
+            for old_id in list(self._task_records)[:overflow]:
+                self._task_records.pop(old_id, None)
+
+    def task_records(self) -> Mapping[str, dict[str, Any]]:
+        """Return the bounded store of completed/known task records."""
+        return self._task_records
+
+    def cancel_task(self, task_id: str) -> bool:
+        """Cancel one running subagent task. Returns True if a live task was cancelled."""
+        task = self._running_tasks.get(task_id)
+        if task is None or task.done():
+            return False
+        task.cancel()
+        return True
 
     def set_provider(self, provider: LLMProvider, model: str) -> None:
         """Update the deprecated runtime source used by legacy ``spawn`` calls."""
@@ -259,6 +412,7 @@ class SubagentManager:
             label=display_label,
             task_description=task,
             started_at=time.monotonic(),
+            started_wall_ms=time.time() * 1000,
         )
         self._task_statuses[task_id] = status
 
@@ -287,6 +441,10 @@ class SubagentManager:
                     del self._session_tasks[session_key]
 
         bg_task.add_done_callback(_cleanup)
+
+        # Fire the initial progress frame so the WebUI shows the task as soon
+        # as it is scheduled (phase ``initializing``).
+        await self._publish_progress(origin, status)
 
         logger.info("Spawned subagent [{}]: {}", task_id, display_label)
         return f"Subagent [{display_label}] started (id: {task_id}). I'll notify you when it completes."
@@ -321,6 +479,7 @@ class SubagentManager:
             label=display_label,
             task_description=task,
             started_at=time.monotonic(),
+            started_wall_ms=time.time() * 1000,
         )
         self._task_statuses[task_id] = status
         logger.info("Running inline subagent [{}]: {}", task_id, display_label)
@@ -373,6 +532,15 @@ class SubagentManager:
             status.phase = payload.get("phase", status.phase)
             status.iteration = payload.get("iteration", status.iteration)
 
+        async def _on_progress(current: SubagentStatus) -> None:
+            await self._publish_progress(origin, current)
+
+        run_hook = self._build_run_hook(
+            task_id, status, origin, runtime, on_progress=_on_progress
+        )
+
+        await self._publish_progress(origin, status)
+
         try:
             root = workspace_scope.project_path if workspace_scope is not None else self.workspace
             cfg = None
@@ -408,7 +576,7 @@ class SubagentManager:
                     runtime=runtime,
                     max_iterations=self.max_iterations,
                     max_tool_result_chars=self.max_tool_result_chars,
-                    hook=_SubagentHook(task_id, status),
+                    hook=run_hook,
                     max_iterations_message="Task completed but no final response was generated.",
                     finalize_on_max_iterations=False,
                     error_message=None,
@@ -436,6 +604,16 @@ class SubagentManager:
                 final_result = result.final_content or "Task completed but no final response was generated."
                 final_status = "ok"
                 logger.info("Subagent [{}] completed successfully", task_id)
+            self._store_record(
+                task_id,
+                origin=origin,
+                label=label,
+                task=task,
+                status=status,
+                final_result=final_result,
+                final_status=final_status,
+            )
+            await self._publish_progress(origin, status)
             if announce:
                 await self._announce_result(
                     task_id,
@@ -448,11 +626,41 @@ class SubagentManager:
                 )
             return final_result
 
+        except asyncio.CancelledError:
+            # User-initiated stop (WebUI stop button / cancel_task). Record it
+            # as a first-class outcome so the UI can render "cancelled".
+            status.phase = "cancelled"
+            status.stop_reason = "cancelled"
+            self._store_record(
+                task_id,
+                origin=origin,
+                label=label,
+                task=task,
+                status=status,
+                final_result="Task cancelled by user.",
+                final_status="cancelled",
+            )
+            try:
+                await self._publish_progress(origin, status)
+            except Exception:  # noqa: BLE001
+                logger.exception("Subagent [{}] cancelled-progress publish failed", task_id)
+            raise
+
         except Exception as e:
             status.phase = "error"
             status.error = str(e)
             logger.exception("Subagent [{}] failed", task_id)
             final_result = f"Error: {e}"
+            self._store_record(
+                task_id,
+                origin=origin,
+                label=label,
+                task=task,
+                status=status,
+                final_result=final_result,
+                final_status="error",
+            )
+            await self._publish_progress(origin, status)
             if announce:
                 await self._announce_result(
                     task_id,

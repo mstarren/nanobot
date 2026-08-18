@@ -11,6 +11,7 @@ import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import type { ModelPresetOption } from "@/components/thread/ModelPresetBadge";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
+import { SubagentStrip } from "@/components/thread/SubagentStrip";
 import { ThreadViewport, type ThreadViewportHandle } from "@/components/thread/ThreadViewport";
 import { useNanobotStream, type SendAttachment, type SendOptions } from "@/hooks/useNanobotStream";
 import { useSessionHistory } from "@/hooks/useSessions";
@@ -743,6 +744,8 @@ export function ThreadShell({
     isStreaming,
     runStartedAt,
     goalState,
+    subagents,
+    stopSubagent,
     send,
     transcribeAudio,
     stop,
@@ -1588,6 +1591,7 @@ export function ThreadShell({
         <FilePreviewAvailabilityProvider
           resolve={historyKey ? resolveFilePreviewAvailability : undefined}
         >
+          <SubagentStrip subagents={subagents} onStop={stopSubagent} />
           <ThreadViewport
             ref={viewportRef}
             messages={displayMessages}

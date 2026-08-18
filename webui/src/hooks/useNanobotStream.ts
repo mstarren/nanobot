@@ -36,6 +36,7 @@ import type {
   SessionMention,
   GoalStateWsPayload,
   MessageDeliveryStatus,
+  SubagentProgress,
   UIMediaAttachment,
   UIMessage,
   WorkspaceScopePayload,
@@ -232,6 +233,10 @@ export function useNanobotStream(
   runStartedAt: number | null;
   /** Latest sustained goal for this ``chatId`` (``goal_state`` WS events). */
   goalState: GoalStateWsPayload | undefined;
+  /** Live background-subagent statuses for this chat (``agent_ui.kind === "subagent"`` frames). */
+  subagents: Record<string, SubagentProgress>;
+  /** Request cancellation of a background subagent. */
+  stopSubagent: (taskId: string) => void;
   send: (
     content: string,
     images?: SendAttachment[],
@@ -261,6 +266,7 @@ export function useNanobotStream(
   /** Unix epoch seconds when the current user turn started; cleared on ``idle``. */
   const [runStartedAt, setRunStartedAt] = useState<number | null>(initialRunStartedAt);
   const [goalState, setGoalState] = useState<GoalStateWsPayload | undefined>(undefined);
+  const [subagents, setSubagents] = useState<Record<string, SubagentProgress>>({});
   const [streamError, setStreamError] = useState<StreamError | null>(null);
   const buffer = useRef<StreamBuffer | null>(null);
   const activeAssistantRef = useRef<ActiveAssistantCursor | null>(null);
@@ -660,6 +666,7 @@ export function useNanobotStream(
     setStreamError(null);
     setRunStartedAt(restoredRunStartedAt);
     setGoalState(chatId ? client.getGoalState(chatId) : undefined);
+    setSubagents({});
     buffer.current = null;
     activeAssistantRef.current = null;
     closedAssistantStreamIdsRef.current.clear();
@@ -864,6 +871,23 @@ export function useNanobotStream(
         // Attach them to the last trace row if it was the last emitted item
         // so a sequence of calls collapses into one compact trace group.
         if (ev.kind === "tool_hint" || ev.kind === "progress") {
+          // Live subagent status frames (agent_ui.kind === "subagent") feed
+          // the SubagentCard strip without becoming assistant messages.
+          const subagentBlob = ev.agent_ui as
+            | { kind: "subagent"; data?: SubagentProgress }
+            | undefined;
+          if (subagentBlob?.kind === "subagent" && subagentBlob.data?.task_id) {
+            const update = subagentBlob.data;
+            setSubagents((prev) => {
+              const merged = { ...prev[update.task_id], ...update };
+              if (merged.phase === "done" || merged.phase === "error" || merged.phase === "cancelled") {
+                merged.running = false;
+              } else {
+                merged.running = true;
+              }
+              return { ...prev, [update.task_id]: merged };
+            });
+          }
           const structuredEvents = normalizeToolProgressEvents(ev.tool_events);
           const turn = turnFieldsFromEvent(ev, "activity");
           setMessages((prev) => {
@@ -989,6 +1013,11 @@ export function useNanobotStream(
           eventSegmentId = detachedActivitySegmentId();
           fileEditSegmentRef.current = eventSegmentId;
         }
+        // Guard against a stale late write: the setMessages updater runs
+        // asynchronously, and a reasoning_delta (or any clear) may have
+        // invalidated the segment since the handler captured it. Only
+        // re-establish the ref when nothing cleared it in the meantime.
+        const handlerSegmentId = eventSegmentId;
         setMessages((prev) => {
           let segmentId = eventSegmentId;
           const base = stripCoveredFileEditToolHintsFromMessages(prev, normalized, turn);
@@ -996,7 +1025,9 @@ export function useNanobotStream(
           if (targetIndex !== null) {
             const target = base[targetIndex];
             segmentId = target.activitySegmentId ?? segmentId ?? detachedActivitySegmentId();
-            if (opensFileEditPhase) fileEditSegmentRef.current = segmentId;
+            if (opensFileEditPhase && fileEditSegmentRef.current === handlerSegmentId) {
+              fileEditSegmentRef.current = segmentId;
+            }
             const merged: UIMessage = {
               ...target,
               fileEdits: mergeFileEdits(target.fileEdits, normalized),
@@ -1006,7 +1037,9 @@ export function useNanobotStream(
             return replaceMessageAt(base, targetIndex, merged);
           }
           segmentId = segmentId ?? detachedActivitySegmentId();
-          if (opensFileEditPhase) fileEditSegmentRef.current = segmentId;
+          if (opensFileEditPhase && fileEditSegmentRef.current === handlerSegmentId) {
+            fileEditSegmentRef.current = segmentId;
+          }
           return [
             ...base,
             {
@@ -1144,6 +1177,14 @@ export function useNanobotStream(
     client.sendMessage(chatId, "/stop");
   }, [chatId, clearActivitySegment, client, flushPendingStreamEvents]);
 
+  /** Request cancellation of one background subagent (see /api/subagents/<id>/stop). */
+  const stopSubagent = useCallback(
+    (taskId: string) => {
+      void client.requestMutation("subagent.stop", { task_id: taskId });
+    },
+    [client],
+  );
+
   const reconcileTurnComplete = useCallback(() => {
     cancelStreamEndTimer();
     clearPendingStreamWork();
@@ -1168,6 +1209,8 @@ export function useNanobotStream(
     isStreaming,
     runStartedAt,
     goalState,
+    subagents,
+    stopSubagent,
     send,
     transcribeAudio,
     stop,
