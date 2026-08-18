@@ -54,6 +54,7 @@ def _default_media_dir(channel: str | None = None) -> Path:
 # attacker who somehow gets a signed URL for an unexpected file type can't
 # trick the browser into sniffing executable content.
 _MEDIA_ALLOWED_MIMES: frozenset[str] = frozenset({
+    "application/pdf",
     "image/png",
     "image/jpeg",
     "image/webp",

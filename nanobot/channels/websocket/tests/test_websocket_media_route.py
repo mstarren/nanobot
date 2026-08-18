@@ -503,3 +503,34 @@ async def test_media_route_serves_svg_with_strict_csp(
     assert resp.headers.get("x-content-type-options") == "nosniff"
     assert "default-src 'none'" in resp.headers.get("content-security-policy", "")
     assert "sandbox" in resp.headers.get("content-security-policy", "")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/svg+xml")
+    assert resp.headers.get("x-content-type-options") == "nosniff"
+    assert "default-src 'none'" in resp.headers.get("content-security-policy", "")
+    assert "sandbox" in resp.headers.get("content-security-policy", "")
+
+
+@pytest.mark.asyncio
+async def test_media_route_serves_pdf_with_native_mime(
+    bus: MagicMock, tmp_path: Path
+) -> None:
+    """PDFs are explicitly allowlisted so the preview pane can iframe them."""
+    media = tmp_path / "media"
+    media.mkdir()
+    target = media / "report.pdf"
+    target.write_bytes(b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF")
+
+    channel = _ch(bus, port=29930)
+    with patch("nanobot.webui.media_gateway.get_media_dir", return_value=media):
+        url_path = _sign_media_path(channel, target)
+        assert url_path is not None
+        server_task = asyncio.create_task(channel.start())
+        try:
+            resp = await _http_get(f"http://127.0.0.1:29930{url_path}")
+        finally:
+            await channel.stop()
+            await server_task
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.headers.get("x-content-type-options") == "nosniff"

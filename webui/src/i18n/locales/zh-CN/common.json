@@ -1463,7 +1463,15 @@
     "truncated": "文件较大，当前只显示前半部分预览。",
     "rendered": "渲染",
     "source": "源码",
-    "viewToggle": "预览视图"
+    "viewToggle": "预览视图",
+    "htmlRender": "渲染 HTML",
+    "htmlBack": "返回源码",
+    "htmlWarning": "此文件包含 HTML。渲染会在隔离的沙箱中运行：脚本无法访问此应用，且对外网络请求会被阻止。",
+    "htmlFrame": "HTML 预览",
+    "imageFailed": "无法加载此图片。",
+    "mediaUnavailable": "此文件类型无法在当前网关中预览。",
+    "pdfFrame": "PDF 预览",
+    "csvRowLimit": "仅显示前 {{count}} 行。"
   },
   "code": {
     "fallbackLanguage": "代码",

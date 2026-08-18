@@ -1463,7 +1463,15 @@
     "truncated": "檔案較大，因此預覽內容已截斷。",
     "rendered": "渲染",
     "source": "原始碼",
-    "viewToggle": "預覽檢視"
+    "viewToggle": "預覽檢視",
+    "htmlRender": "渲染 HTML",
+    "htmlBack": "返回原始碼",
+    "htmlWarning": "此檔案包含 HTML。渲染會在隔離的沙箱中執行：腳本無法存取此應用程式，且對外網路請求會被阻止。",
+    "htmlFrame": "HTML 預覽",
+    "imageFailed": "無法載入此圖片。",
+    "mediaUnavailable": "此檔案類型無法在目前閘道中預覽。",
+    "pdfFrame": "PDF 預覽",
+    "csvRowLimit": "僅顯示前 {{count}} 列。"
   },
   "code": {
     "fallbackLanguage": "程式碼",

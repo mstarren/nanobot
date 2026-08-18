@@ -34,6 +34,18 @@ vi.mock("@/components/MarkdownText", () => ({
   }) => <div data-testid="mock-markdown-text">{children}</div>,
 }));
 
+vi.mock("@/components/ImageLightbox", () => ({
+  ImageLightbox: ({
+    images,
+    index,
+  }: {
+    images: Array<{ url?: string }>;
+    index: number | null;
+  }) => (index === null ? null : (
+    <div data-testid="mock-lightbox">{images[0]?.url}</div>
+  )),
+}));
+
 vi.mock("@/components/ui/segmented-control", () => ({
   SegmentedControl: ({
     value,
@@ -249,5 +261,240 @@ describe("FilePreviewPanel", () => {
     const codeBlock = await screen.findByTestId("mock-code-block");
     expect(codeBlock).toHaveTextContent("print('ok')");
     expect(screen.queryByTestId("mock-segmented-control")).not.toBeInTheDocument();
+  });
+
+  it("renders an inline image for image payloads with a media URL", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/photo.png",
+      display_path: "photo.png",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 1234,
+      truncated: false,
+      kind: "image",
+      media_url: "/api/media/sig/payload",
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="photo.png"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const img = await screen.findByRole("img", { name: "photo.png" });
+    expect(img).toHaveAttribute("src", "/api/media/sig/payload");
+
+    img.dispatchEvent(new Event("load", { bubbles: true }));
+    await userEvent.click(img);
+    expect(screen.getByTestId("mock-lightbox")).toHaveTextContent("/api/media/sig/payload");
+  });
+
+  it("shows an unavailable message for image payloads without a media URL", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/photo.png",
+      display_path: "photo.png",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 1234,
+      truncated: false,
+      kind: "image",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="photo.png"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    expect(
+      await screen.findByText("This file type is not previewable on this gateway."),
+    ).toBeInTheDocument();
+  });
+
+  it("requires an explicit opt-in before rendering HTML in a sandboxed iframe", async () => {
+    const user = userEvent.setup();
+    const html = "<!doctype html><html><head></head><body><h1>hi</h1></body></html>";
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/page.html",
+      display_path: "page.html",
+      project_path: "/workspace",
+      language: "html",
+      content: html,
+      size: html.length,
+      truncated: false,
+      kind: "html",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="page.html"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    await screen.findByTestId("mock-code-block");
+    await user.click(screen.getByRole("button", { name: "Rendered" }));
+
+    expect(screen.queryByTestId("file-preview-html-frame")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("file-preview-html-render"));
+
+    const frame = screen.getByTestId("file-preview-html-frame") as HTMLIFrameElement;
+    expect(frame.getAttribute("sandbox")).toContain("allow-scripts");
+    expect(frame.getAttribute("sandbox")).not.toContain("allow-same-origin");
+    expect(frame.getAttribute("srcDoc") ?? "").toContain("Content-Security-Policy");
+    expect(frame.getAttribute("srcDoc") ?? "").toContain("connect-src 'none'");
+    expect(frame.getAttribute("srcDoc") ?? "").toContain("<h1>hi</h1>");
+  });
+
+  it("can back out of HTML rendering to the source view", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/page.html",
+      display_path: "page.html",
+      project_path: "/workspace",
+      language: "html",
+      content: "<h1>hi</h1>",
+      size: 11,
+      truncated: false,
+      kind: "html",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="page.html"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    await screen.findByTestId("mock-code-block");
+    await user.click(screen.getByRole("button", { name: "Rendered" }));
+    await user.click(screen.getByRole("button", { name: "Back to source" }));
+
+    expect(screen.getByTestId("mock-code-block")).toHaveTextContent("<h1>hi</h1>");
+    expect(screen.queryByTestId("file-preview-html-frame")).not.toBeInTheDocument();
+  });
+
+  it("renders PDF payloads in an iframe", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/doc.pdf",
+      display_path: "doc.pdf",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 2048,
+      truncated: false,
+      kind: "pdf",
+      media_url: "/api/media/sig/pdf",
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="doc.pdf"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const frame = await screen.findByTestId("file-preview-pdf-frame");
+    expect(frame).toHaveAttribute("src", "/api/media/sig/pdf");
+  });
+
+  it("renders video payloads with controls", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/clip.mp4",
+      display_path: "clip.mp4",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 102400,
+      truncated: false,
+      kind: "video",
+      media_url: "/api/media/sig/video",
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="clip.mp4"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const video = await screen.findByTestId("file-preview-video") as HTMLVideoElement;
+    expect(video).toHaveAttribute("src", "/api/media/sig/video");
+    expect(video.controls).toBe(true);
+  });
+
+  it("renders CSV payloads as a table", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/data.csv",
+      display_path: "data.csv",
+      project_path: "/workspace",
+      language: "csv",
+      content: "name,count\n\"alpha, inc\",3\nbeta,4\n",
+      size: 30,
+      truncated: false,
+      kind: "csv",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="data.csv"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    const table = await screen.findByTestId("file-preview-csv-table");
+    expect(table).toHaveTextContent("name");
+    expect(table).toHaveTextContent("alpha, inc");
+    expect(table).toHaveTextContent("beta");
+    expect(screen.queryByTestId("mock-code-block")).not.toBeInTheDocument();
+  });
+
+  it("falls back for pdf/video payloads without a media URL", async () => {
+    vi.mocked(fetchFilePreview).mockResolvedValue({
+      path: "/workspace/doc.pdf",
+      display_path: "doc.pdf",
+      project_path: "/workspace",
+      language: "",
+      content: "",
+      size: 2048,
+      truncated: false,
+      kind: "pdf",
+      media_url: null,
+    });
+
+    render(
+      <FilePreviewPanel
+        sessionKey="websocket:chat-1"
+        path="doc.pdf"
+        token="tok"
+        onClose={() => {}}
+      />,
+    );
+
+    expect(
+      await screen.findByText("This file type is not previewable on this gateway."),
+    ).toBeInTheDocument();
   });
 });
