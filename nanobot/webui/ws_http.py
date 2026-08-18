@@ -120,6 +120,15 @@ from nanobot.webui.skills_marketplace import (
     search_marketplace_skills,
     trending_marketplace_skills,
 )
+from nanobot.webui.notebook_store import (
+    NOTEBOOK_INSTRUCTIONS_METADATA_KEY,
+    add_session as notebook_add_session,
+    create_notebook as notebook_create,
+    delete_notebook as notebook_delete,
+    list_notebooks as notebook_list,
+    remove_session as notebook_remove_session,
+    update_notebook as notebook_update,
+)
 from nanobot.webui.thread_disk import delete_webui_thread
 from nanobot.webui.transcript import build_webui_thread_response
 from nanobot.webui.workspaces import WebUIWorkspaceController
@@ -449,6 +458,8 @@ class GatewayHTTPHandler:
             return True
         if re.match(r"^/api/sessions/[^/]+/delete$", path):
             return True
+        if re.match(r"^/api/notebooks/[^/]+", path):
+            return True
         if re.match(r"^/api/webui/automations/(enable|disable|delete|run|update)$", path):
             return True
         return path in {
@@ -472,6 +483,36 @@ class GatewayHTTPHandler:
             if not isinstance(key, str) or not key.strip():
                 return _http_error(400, "missing session key")
             return f"/api/sessions/{quote(key, safe='')}/delete"
+        if action == "notebook.create":
+            return "/api/notebooks"
+        if action in {"notebook.update", "notebook.delete"}:
+            notebook_id = payload.get("notebook_id")
+            if not isinstance(notebook_id, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{1,64}", notebook_id
+            ):
+                return _http_error(400, "invalid notebook id")
+            suffix = "update" if action == "notebook.update" else "delete"
+            return f"/api/notebooks/{quote(notebook_id, safe='')}/{suffix}"
+        if action == "notebook.session_add":
+            notebook_id = payload.get("notebook_id")
+            if not isinstance(notebook_id, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{1,64}", notebook_id
+            ):
+                return _http_error(400, "invalid notebook id")
+            return f"/api/notebooks/{quote(notebook_id, safe='')}/sessions/add"
+        if action == "notebook.session_remove":
+            notebook_id = payload.get("notebook_id")
+            session_key = payload.get("session_key")
+            if not isinstance(notebook_id, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{1,64}", notebook_id
+            ):
+                return _http_error(400, "invalid notebook id")
+            if not isinstance(session_key, str) or not session_key.strip():
+                return _http_error(400, "missing session key")
+            return (
+                f"/api/notebooks/{quote(notebook_id, safe='')}/sessions/"
+                f"{quote(session_key, safe='')}/remove"
+            )
         connect_action = _WEBUI_CHANNEL_CONNECT_ACTIONS.get(action)
         if connect_action is not None:
             channel = payload.get("channel")
@@ -1101,7 +1142,176 @@ class GatewayHTTPHandler:
             return self._handle_webui_sidebar_state(request)
         if got == "/api/webui/sidebar-state/update":
             return self._handle_webui_sidebar_state_update(request)
+        if got == "/api/notebooks":
+            return self._handle_notebooks(request)
+        m = re.match(r"^/api/notebooks/([^/]+)/(update|delete|sessions/add)$", got)
+        if m:
+            return self._handle_notebook_mutation(request, m.group(1), m.group(2))
+        m = re.match(r"^/api/notebooks/([^/]+)/sessions/([^/]+)/remove$", got)
+        if m:
+            return self._handle_notebook_session_remove(request, m.group(1), m.group(2))
         return None
+
+    # -- Notebook routes -----------------------------------------------------
+
+    @staticmethod
+    def _notebook_mutation_payload(request: WsRequest) -> dict[str, Any]:
+        return dict(getattr(request, _WEBUI_MUTATION_PAYLOAD_ATTR, {}) or {})
+
+    def _handle_notebooks(self, request: WsRequest) -> Response:
+        """GET /api/notebooks — list notebooks; mutation POST — create one.
+
+        ``notebook.create`` maps to this path (no id in the URL), so a
+        mutation payload on the request means "create", otherwise list.
+        """
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        payload = self._notebook_mutation_payload(request)
+        if payload:
+            try:
+                notebook = notebook_create(
+                    name=payload.get("name", ""),
+                    emoji=payload.get("emoji") or "",
+                    instructions=payload.get("instructions") or "",
+                )
+                return _http_json_response({"notebook": notebook})
+            except ValueError as e:
+                return _http_error(400, str(e))
+            except Exception as e:
+                self._log.exception("notebook create failed")
+                return _http_error(500, f"notebook store error: {e}")
+        try:
+            return _http_json_response({"notebooks": notebook_list()})
+        except Exception as e:
+            self._log.exception("notebook list failed")
+            return _http_error(500, f"notebook store error: {e}")
+
+    def _handle_notebook_mutation(
+        self,
+        request: WsRequest,
+        notebook_id: str,
+        action: str,
+    ) -> Response:
+        """POST create/update/delete + session-add for notebooks."""
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        payload = self._notebook_mutation_payload(request)
+        try:
+            if action == "update":
+                updated = notebook_update(
+                    notebook_id,
+                    name=payload.get("name"),
+                    emoji=payload.get("emoji"),
+                    instructions=payload.get("instructions"),
+                )
+                if updated is None:
+                    return _http_error(404, "notebook not found")
+                self._sync_notebook_instructions(notebook_id, updated)
+                return _http_json_response({"notebook": updated})
+            if action == "delete":
+                deleted = notebook_delete(notebook_id)
+                if not deleted:
+                    return _http_error(404, "notebook not found")
+                self._clear_notebook_instructions(notebook_id)
+                return _http_json_response({"deleted": True})
+            if action == "sessions/add":
+                session_key = payload.get("session_key")
+                if not isinstance(session_key, str) or not session_key.strip():
+                    return _http_error(400, "missing session key")
+                notebook, added = notebook_add_session(notebook_id, session_key)
+                if notebook is None:
+                    return _http_error(404, "notebook not found")
+                self._apply_notebook_instructions(notebook, session_key)
+                return _http_json_response({"notebook": notebook, "added": added})
+            return _http_error(400, "unknown notebook action")
+        except ValueError as e:
+            return _http_error(400, str(e))
+        except Exception as e:
+            self._log.exception("notebook mutation failed")
+            return _http_error(500, f"notebook store error: {e}")
+
+    def _handle_notebook_session_remove(
+        self,
+        request: WsRequest,
+        notebook_id: str,
+        session_key: str,
+    ) -> Response:
+        """Remove a session from a notebook and clear its injected instructions."""
+        if not self.check_api_token(request):
+            return _http_error(401, "Unauthorized")
+        try:
+            from urllib.parse import unquote
+
+            decoded_key = unquote(session_key)
+            notebook, removed = notebook_remove_session(notebook_id, decoded_key)
+            if notebook is None:
+                return _http_error(404, "notebook not found")
+            self._clear_session_instructions(notebook_id, decoded_key)
+            return _http_json_response({"notebook": notebook, "removed": removed})
+        except Exception as e:
+            self._log.exception("notebook session remove failed")
+            return _http_error(500, f"notebook store error: {e}")
+
+    # -- Notebook <-> session metadata sync ----------------------------------
+
+    def _sync_notebook_instructions(self, notebook_id: str, notebook: dict[str, Any]) -> None:
+        """Propagate edited notebook instructions to every assigned session."""
+        for session_key in notebook.get("session_keys", []):
+            self._apply_notebook_instructions(notebook, session_key)
+
+    def _apply_notebook_instructions(self, notebook: dict[str, Any], session_key: str) -> None:
+        if self.session_manager is None:
+            return
+        # Only inject into sessions that already exist (the WebUI only offers
+        # "Add to notebook" on real chats).
+        if self.session_manager.read_session_metadata(session_key) is None:
+            return
+        session = self.session_manager.get_or_create(session_key)
+        instructions = notebook.get("instructions") or ""
+        metadata = dict(session.metadata)
+        if instructions.strip():
+            metadata[NOTEBOOK_INSTRUCTIONS_METADATA_KEY] = instructions
+        else:
+            metadata.pop(NOTEBOOK_INSTRUCTIONS_METADATA_KEY, None)
+        if metadata != dict(session.metadata):
+            session.metadata = metadata
+            self.session_manager.save(session)
+
+    def _clear_session_instructions(self, notebook_id: str, session_key: str) -> None:
+        if self.session_manager is None:
+            return
+        session = self.session_manager.get_or_create(session_key)
+        metadata = dict(session.metadata)
+        if NOTEBOOK_INSTRUCTIONS_METADATA_KEY not in metadata:
+            return
+        # Only clear when this session belongs to the removed notebook.
+        notebook = next(
+            (n for n in notebook_list() if n["id"] == notebook_id),
+            None,
+        )
+        if notebook is not None and session_key in notebook.get("session_keys", []):
+            return
+        metadata.pop(NOTEBOOK_INSTRUCTIONS_METADATA_KEY, None)
+        session.metadata = metadata
+        self.session_manager.save(session)
+
+    def _clear_notebook_instructions(self, notebook_id: str) -> None:
+        if self.session_manager is None:
+            return
+        # The notebook is gone; drop the injected instructions from every
+        # session that still carries them.
+        for info in self.session_manager.list_sessions():
+            key = info["key"]
+            metadata = self.session_manager.read_session_metadata(key)
+            if not isinstance(metadata, dict):
+                continue
+            if NOTEBOOK_INSTRUCTIONS_METADATA_KEY not in metadata:
+                continue
+            session = self.session_manager.get_or_create(key)
+            session_metadata = dict(session.metadata)
+            session_metadata.pop(NOTEBOOK_INSTRUCTIONS_METADATA_KEY, None)
+            session.metadata = session_metadata
+            self.session_manager.save(session)
 
     def _handle_commands(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):

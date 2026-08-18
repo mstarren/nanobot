@@ -11,6 +11,7 @@ import type { MouseEvent as ReactMouseEvent, ReactElement } from "react";
 import {
   Archive,
   ArchiveRestore,
+  BookOpen,
   ChevronDown,
   Folder,
   FolderTree,
@@ -210,6 +211,7 @@ interface ChatListProps {
   onRequestRename: (key: string, label: string) => void;
   onRequestRenameTab?: (key: string, label: string) => void;
   onToggleArchive: (key: string) => void;
+  onAddToNotebook?: (key: string) => void;
   paneGroups?: Record<string, SidebarPaneGroup>;
   onSelectPane?: (tabKey: string, paneKey: string) => void;
   onCreateTab?: (paneKey: string) => void;
@@ -255,6 +257,7 @@ export const ChatList = memo(function ChatList({
   onRequestRename,
   onRequestRenameTab,
   onToggleArchive,
+  onAddToNotebook,
   paneGroups = {},
   onSelectPane,
   onCreateTab,
@@ -1028,6 +1031,12 @@ export const ChatList = memo(function ChatList({
                                   ))}
                                   onMove={(targetKey) => onAttachPane(s.key, targetKey)}
                                 />
+                              ) : null}
+                              {onAddToNotebook ? (
+                                <DropdownMenuItem onSelect={() => onAddToNotebook(s.key)}>
+                                  <BookOpen className="h-4 w-4 shrink-0" aria-hidden />
+                                  {t("notebooks.addToNotebook")}
+                                </DropdownMenuItem>
                               ) : null}
                               <DropdownMenuItem
                                 onSelect={() => beginDeleteSelection(tabDeleteKeys)}

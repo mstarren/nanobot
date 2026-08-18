@@ -35,6 +35,7 @@ from nanobot.agent.tools.context import RequestContext, bind_request_context, re
 from nanobot.agent.tools.exec_session import ExecSessionManager
 from nanobot.agent.tools.file_state import FileStateStore, bind_file_states, reset_file_states
 from nanobot.agent.tools.message import MessageTool
+from nanobot.webui.notebook_store import NOTEBOOK_INSTRUCTIONS_METADATA_KEY
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.runtime_control import AgentRuntimeControl
 from nanobot.agent.tools.self import MyTool
@@ -724,6 +725,10 @@ class AgentLoop:
         """Build the initial message list for the LLM turn."""
         assert ctx.session is not None
         scope = self.workspace_scopes.for_message(ctx.msg, ctx.session.metadata)
+        notebook_instructions = cast(
+            str | None,
+            ctx.session.metadata.get(NOTEBOOK_INSTRUCTIONS_METADATA_KEY),
+        )
         return self.context.build_messages(
             history=ctx.history,
             current_message=ctx.msg.content,
@@ -736,6 +741,9 @@ class AgentLoop:
             include_memory_recent_history=not ctx.ephemeral,
             session_key=ctx.session.key,
             unified_session=self._unified_session,
+            notebook_instructions=(
+                notebook_instructions if notebook_instructions and notebook_instructions.strip() else None
+            ),
         )
 
     def _request_context_for_turn(self, ctx: TurnContext) -> RequestContext:

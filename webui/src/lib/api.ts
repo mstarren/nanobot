@@ -17,6 +17,8 @@ import type {
   ModelConfigurationCreate,
   ModelConfigurationUpdate,
   NetworkSafetySettingsUpdate,
+  Notebook,
+  NotebooksPayload,
   PairingPayload,
   ProviderCreationUpdate,
   ProviderModelsPayload,
@@ -889,6 +891,72 @@ export async function updateSidebarState(
   state: SidebarStatePayload,
 ): Promise<SidebarStatePayload> {
   return mutation<SidebarStatePayload>(transport, "sidebar.update", { state });
+}
+
+export async function fetchNotebooks(
+  token: string,
+  base: string = "",
+): Promise<NotebooksPayload> {
+  return request<NotebooksPayload>(
+    `${base}/api/notebooks`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function createNotebook(
+  transport: WebUIMutationTransport,
+  values: { name: string; emoji?: string; instructions?: string },
+): Promise<{ notebook: Notebook }> {
+  return mutation<{ notebook: Notebook }>(transport, "notebook.create", values);
+}
+
+export async function updateNotebook(
+  transport: WebUIMutationTransport,
+  notebook_id: string,
+  values: { name?: string; emoji?: string; instructions?: string },
+): Promise<{ notebook: Notebook }> {
+  return mutation<{ notebook: Notebook }>(
+    transport,
+    "notebook.update",
+    { notebook_id, ...values },
+  );
+}
+
+export async function deleteNotebook(
+  transport: WebUIMutationTransport,
+  notebook_id: string,
+): Promise<{ deleted: boolean }> {
+  return mutation<{ deleted: boolean }>(
+    transport,
+    "notebook.delete",
+    { notebook_id },
+  );
+}
+
+export async function addSessionToNotebook(
+  transport: WebUIMutationTransport,
+  notebook_id: string,
+  session_key: string,
+): Promise<{ notebook: Notebook; added: boolean }> {
+  return mutation<{ notebook: Notebook; added: boolean }>(
+    transport,
+    "notebook.session_add",
+    { notebook_id, session_key },
+  );
+}
+
+export async function removeSessionFromNotebook(
+  transport: WebUIMutationTransport,
+  notebook_id: string,
+  session_key: string,
+): Promise<{ notebook: Notebook; removed: boolean }> {
+  return mutation<{ notebook: Notebook; removed: boolean }>(
+    transport,
+    "notebook.session_remove",
+    { notebook_id, session_key },
+  );
 }
 
 export async function updateSettings(

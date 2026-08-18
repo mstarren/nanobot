@@ -1532,5 +1532,25 @@
       "usePath": "Usar ruta",
       "absolutePathRequired": "Introduce una ruta absoluta de carpeta en esta máquina."
     }
+  },
+  "notebooks": {
+    "title": "Notebooks",
+    "new": "New notebook",
+    "empty": "No notebooks yet. Create one to group chats with shared instructions.",
+    "edit": "Edit notebook",
+    "editTitle": "Edit notebook",
+    "newTitle": "New notebook",
+    "editDescription": "Notebooks group chats and inject shared instructions into their prompts.",
+    "namePlaceholder": "Notebook name",
+    "emoji": "Emoji",
+    "emojiPlaceholder": "📓",
+    "instructionsPlaceholder": "Persistent instructions for every chat in this notebook…",
+    "save": "Save",
+    "delete": "Delete notebook",
+    "confirmDelete": "Confirm delete?",
+    "addToNotebook": "Add to notebook",
+    "addToNotebookDescription": "Choose a notebook for this chat. Its instructions will be added to the chat's system prompt.",
+    "addCurrentChat": "Add current chat",
+    "removeSession": "Remove from notebook"
   }
 }

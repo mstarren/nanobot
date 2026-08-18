@@ -422,6 +422,20 @@ export interface SidebarStatePayload {
   updated_at?: string | null;
 }
 
+export interface Notebook {
+  id: string;
+  name: string;
+  emoji: string;
+  instructions: string;
+  session_keys: string[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface NotebooksPayload {
+  notebooks: Notebook[];
+}
+
 export interface BootstrapResponse {
   token?: string;
   api_token?: string;

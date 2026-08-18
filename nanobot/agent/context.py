@@ -76,6 +76,7 @@ class ContextBuilder:
         include_memory_recent_history: bool = True,
         session_key: str | None = None,
         unified_session: bool = False,
+        notebook_instructions: str | None = None,
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         root = workspace or self.workspace
@@ -125,6 +126,9 @@ class ContextBuilder:
 
         if session_summary:
             parts.append(f"[Archived Context Summary]\n\n{session_summary}")
+
+        if notebook_instructions and notebook_instructions.strip():
+            parts.append(f"# Notebook Instructions\n\n{notebook_instructions.strip()}")
 
         return "\n\n---\n\n".join(parts)
 
@@ -220,6 +224,7 @@ class ContextBuilder:
         include_memory_recent_history: bool = True,
         session_key: str | None = None,
         unified_session: bool = False,
+        notebook_instructions: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call."""
         root = workspace or self.workspace
@@ -240,6 +245,7 @@ class ContextBuilder:
                     include_memory_recent_history=include_memory_recent_history,
                     session_key=session_key,
                     unified_session=unified_session,
+                    notebook_instructions=notebook_instructions,
                 ),
             },
             *history,
