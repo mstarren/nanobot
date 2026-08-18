@@ -1463,7 +1463,13 @@
     "truncated": "Bản xem trước bị cắt vì tệp này lớn.",
     "rendered": "Hiển thị",
     "source": "Mã nguồn",
-    "viewToggle": "Chế độ xem trước"
+    "viewToggle": "Chế độ xem trước",
+    "htmlRender": "Hiển thị HTML",
+    "htmlBack": "Quay lại mã nguồn",
+    "htmlWarning": "Tệp này chứa HTML. Việc hiển thị chạy trong môi trường cách ly: tập lệnh không thể truy cập ứng dụng này và các yêu cầu mạng ra ngoài bị chặn.",
+    "htmlFrame": "Xem trước HTML",
+    "imageFailed": "Không thể tải hình ảnh này.",
+    "mediaUnavailable": "Loại tệp này không xem trước được trên cổng này."
   },
   "code": {
     "fallbackLanguage": "mã",

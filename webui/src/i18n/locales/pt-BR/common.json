@@ -1463,7 +1463,13 @@
     "truncated": "A pré-visualização foi truncada porque este arquivo é grande.",
     "rendered": "Renderizado",
     "source": "Código-fonte",
-    "viewToggle": "Visualização"
+    "viewToggle": "Visualização",
+    "htmlRender": "Renderizar HTML",
+    "htmlBack": "Voltar ao código-fonte",
+    "htmlWarning": "Este arquivo contém HTML. A renderização ocorre em um sandbox isolado: scripts não podem acessar este aplicativo e solicitações de rede externas são bloqueadas.",
+    "htmlFrame": "Visualização HTML",
+    "imageFailed": "Não foi possível carregar esta imagem.",
+    "mediaUnavailable": "Este tipo de arquivo não pode ser pré-visualizado neste gateway."
   },
   "code": {
     "fallbackLanguage": "código",
